@@ -1,0 +1,17 @@
+venv/
+__pycache__/
+output/
+*.pyc
+*.dmp
+*.pcap
+*.img
+*.raw
+*.json
+!src/data/ioc_patterns.json
+data/live_case/
+dashboard/node_modules/
+.venv/
+chroma_store/
+aria_report.md
+__pycache__/
+*.pyc
