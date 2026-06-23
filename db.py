@@ -2,8 +2,8 @@ import chromadb
 from schema import Finding
 from typing import List, Dict, Any
 
-# Initialize ChromaDB client 
-chroma_client = chromadb.Client()
+# Initialize ChromaDB client
+chroma_client = chromadb.PersistentClient(path="./chroma_store") 
 collection = chroma_client.get_or_create_collection(name="aria_findings") # [cite: 23]
 
 def add_finding(finding: Finding) -> None: # [cite: 26]

@@ -11,3 +11,7 @@ output/
 data/live_case/
 dashboard/node_modules/
 .venv/
+chroma_store/
+aria_report.md
+__pycache__/
+*.pyc
