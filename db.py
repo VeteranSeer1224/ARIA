@@ -1,21 +1,29 @@
+import os
 import chromadb
 from schema import Finding
 from typing import List, Dict, Any
 
-# Initialize ChromaDB client
-chroma_client = chromadb.PersistentClient(path="./chroma_store") 
-collection = chroma_client.get_or_create_collection(name="aria_findings") # [cite: 23]
+_DB_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "chroma_store"
+)
 
-def add_finding(finding: Finding) -> None: # [cite: 26]
+chroma_client = chromadb.PersistentClient(path=_DB_PATH)
+collection = chroma_client.get_or_create_collection(name="aria_findings")
+
+def add_finding(finding: Finding) -> None:
     """Writes a parsed Finding object into ChromaDB."""
-    collection.add(
-        documents=[finding.description], 
+    collection.upsert(
+        documents=[finding.description],
         metadatas=[{
             "id": finding.id,
             "task_id": finding.task_id,
             "surface": finding.surface,
             "title": finding.title,
-            "severity": finding.severity
+            "severity": finding.severity,
+            "evidence": finding.evidence,
+            "remediation": finding.remediation,
+            "timestamp": finding.timestamp.isoformat()
         }],
         ids=[finding.id]
     )
