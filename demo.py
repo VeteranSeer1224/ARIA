@@ -1,7 +1,7 @@
 import time
 from schema import Task
 from agents.web_agent_demo import run_web_agent_demo
-from stubs import mock_network_agent
+from stubs import mock_network_agent, mock_ad_agent
 import reporting_agent
 from db import query_credentials, clear_findings
 
@@ -57,16 +57,19 @@ def run_pipeline_demo():
     time.sleep(1)
     network_tasks = [t for t in tasks if t.type in ["network", "ad"]]
     for t in network_tasks:
-        print(f"\n[+] Executing Network Agent on {t.target}...")
+        print(f"\n[+] Executing Network/AD Agent on {t.target}...")
         if found_creds:
             print(f"[+] Passing {len(found_creds)} credential hint(s) to Network Agent...")
         try:
-            finding_ids = mock_network_agent(t, found_creds=found_creds)
+            if t.type == "network":
+                finding_ids = mock_network_agent(t, found_creds=found_creds)
+            elif t.type == "ad":
+                finding_ids = mock_ad_agent(t)
             t.status = "completed"
-            print(f"[+] Network Agent finished. Stored {len(finding_ids)} findings in ChromaDB.")
+            print(f"[+] Agent finished. Stored {len(finding_ids)} findings in ChromaDB.")
         except Exception as e:
             t.status = "failed"
-            print(f"[!] Network Agent failed: {e}")
+            print(f"[!] Agent failed: {e}")
 
     print("\n[*] PHASE 5: REPORT GENERATION")
     time.sleep(1)

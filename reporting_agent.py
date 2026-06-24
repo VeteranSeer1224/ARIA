@@ -6,20 +6,31 @@ from cvss import CVSS3
 from db import collection
 
 
+_PLAIN_TEXT_LABELS = {"critical", "high", "medium", "low", "none"}
+
+
 def get_severity_label(meta):
     """
     Computes the real CVSS 3.1 base score from the severity vector string
-    using the official formula (via the cvss library), instead of guessing
-    from keywords. Falls back to UNKNOWN if the vector is missing or invalid.
+    using the official formula (via the cvss library). If the severity field
+    is a plain-text label (e.g. 'Medium', 'Critical') rather than a CVSS
+    vector, it is normalised directly. Falls back to UNKNOWN if missing or
+    unrecognised.
     """
     severity_str = meta.get("severity", "")
+    # Try parsing as a proper CVSS vector first
     try:
         c = CVSS3(severity_str)
         score = float(c.base_score)
         label = c.severities()[0].upper()
         return label, score
     except Exception:
-        return "UNKNOWN", None
+        pass
+    # Fall back to plain-text label (e.g. stored by parsers as 'Medium')
+    normalised = severity_str.strip().lower()
+    if normalised in _PLAIN_TEXT_LABELS:
+        return normalised.upper(), None
+    return "UNKNOWN", None
 
 
 def seed_dummy_data():
