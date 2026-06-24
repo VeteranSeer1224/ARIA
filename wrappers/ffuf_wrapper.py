@@ -7,8 +7,6 @@ WORDLIST = os.path.join(
 )
 
 def run_ffuf(url: str, timeout: int = 120) -> str:
-
-def run_ffuf(url: str) -> str:
     """
     Runs FFUF against a target URL and returns raw output.
     """
@@ -17,12 +15,6 @@ def run_ffuf(url: str) -> str:
         [
             "ffuf",
             "-u", f"{url}/FUZZ",
-            "-w", "wordlists/test.txt"
-        ],
-        capture_output=True,
-        text=True
-    )
-
             "-w", WORDLIST
         ],
         capture_output=True,
@@ -34,7 +26,5 @@ def run_ffuf(url: str) -> str:
         raise RuntimeError(
             f"ffuf exited with code {result.returncode}: {result.stderr.strip()}"
         )
-
-    return result.stdout + result.stderr
 
     return result.stdout + result.stderr

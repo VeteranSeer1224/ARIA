@@ -65,7 +65,7 @@ def clear_findings() -> None:
     if ids:
         collection.delete(ids=ids)
 
-def get_task_context(task_id: str) -> List[Dict[str, Any]]:
+def get_task_context(task_id: str) -> Dict[str, Any]:
     """Retrieves all findings associated with a specific task."""
     results = collection.get(
         where={"task_id": task_id}

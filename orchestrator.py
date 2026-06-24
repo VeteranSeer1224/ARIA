@@ -10,7 +10,7 @@ from schema import Task
 from agents.web_agent import run_web_agent
 
 # KEEP NETWORK STUB FOR P3
-from stubs import mock_network_agent
+from stubs import mock_network_agent, mock_ad_agent
 
 from db import get_task_context, query_credentials
 
@@ -40,12 +40,12 @@ class AriaOrchestrator:
             "penetration testing pipeline. "
             "Your job is to reason, delegate, and synthesize. "
             "You do NOT execute tools. "
-            "Given a target scope, output a JSON array of tasks "
-            "to be routed to specialist agents. "
+            "Given a target scope, output a JSON object with a single key named 'tasks'. "
+            "The value of 'tasks' must be an array of task objects to be routed to specialist agents. "
             "Each task must strictly follow this JSON schema: "
             "{ 'type': 'web' | 'network' | 'ad', "
             "'target': 'string representing IP or URL' }. "
-            "Return ONLY the JSON array."
+            "Return ONLY the JSON object."
         )
 
         try:
@@ -65,13 +65,8 @@ class AriaOrchestrator:
             )
 
             content = response.choices[0].message.content
-
-            if "{" in content and "tasks" not in content.lower():
-                raw_tasks = json.loads(content)
-                if isinstance(raw_tasks, dict):
-                    raw_tasks = list(raw_tasks.values())[0]
-            else:
-                raw_tasks = json.loads(content).get("tasks", [])
+            payload = json.loads(content)
+            raw_tasks = payload.get("tasks", [])
 
             tasks = []
             for rt in raw_tasks:
@@ -135,8 +130,12 @@ class AriaOrchestrator:
                 print(f"[Orchestrator] Injecting {len(found_creds)} credential(s) into Network Agent.")
 
             try:
-                task.assigned_agent = "Network/AD Agent (P3)"
-                finding_ids = mock_network_agent(task, found_creds=found_creds)
+                if task.type == "network":
+                    task.assigned_agent = "Network/AD Agent (P3)"
+                    finding_ids = mock_network_agent(task, found_creds=found_creds)
+                elif task.type == "ad":
+                    task.assigned_agent = "Network/AD Agent (P3)"
+                    finding_ids = mock_ad_agent(task)
                 
                 task.status = "completed"
                 task.completed_at = datetime.utcnow()
@@ -148,9 +147,14 @@ class AriaOrchestrator:
 
 
 if __name__ == "__main__":
-    orchestrator = AriaOrchestrator(api_key="your_test_key_here")
-    test_scope = "192.168.1.0/24 internal network and http://dvwa.local"
-    planned_tasks = orchestrator.plan_attack(test_scope)
+    import argparse
+    parser = argparse.ArgumentParser(description="ARIA Orchestrator")
+    parser.add_argument("--scope", required=True, help="Target scope (e.g., '192.168.1.0/24 internal network and http://dvwa.local')")
+    parser.add_argument("--api-key", required=False, help="DeepSeek API Key. Defaults to DEEPSEEK_API_KEY env var.")
+    args = parser.parse_args()
+
+    orchestrator = AriaOrchestrator()
+    planned_tasks = orchestrator.plan_attack(args.scope)
     
     if planned_tasks:
         orchestrator.route_and_execute(planned_tasks)
