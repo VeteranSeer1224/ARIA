@@ -1,5 +1,6 @@
 import subprocess
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 def run_ffuf(url: str) -> str:
 =======
@@ -12,6 +13,10 @@ WORDLIST = os.path.join(
 
 def run_ffuf(url: str, timeout: int = 120) -> str:
 >>>>>>> origin/main
+=======
+
+def run_ffuf(url: str) -> str:
+>>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
     """
     Runs FFUF against a target URL and returns raw output.
     """
@@ -21,12 +26,16 @@ def run_ffuf(url: str, timeout: int = 120) -> str:
             "ffuf",
             "-u", f"{url}/FUZZ",
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
             "-w", "wordlists/test.txt"
         ],
         capture_output=True,
         text=True
     )
 
+<<<<<<< HEAD
 =======
             "-w", WORDLIST
         ],
@@ -41,4 +50,6 @@ def run_ffuf(url: str, timeout: int = 120) -> str:
         )
 
 >>>>>>> origin/main
+=======
+>>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
     return result.stdout + result.stderr
