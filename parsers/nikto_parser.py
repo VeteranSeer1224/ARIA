@@ -2,10 +2,6 @@
 
 from schema import Finding
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
 def parse_nikto(output: str, task_id: str):
 
     findings = []
@@ -41,8 +37,6 @@ def parse_nikto(output: str, task_id: str):
                     remediation="Hide server version information."
                 )
             )
-<<<<<<< HEAD
-=======
 # (keyword, title, severity, remediation)
 _RULES = [
     ("X-Frame-Options",  "Missing X-Frame-Options Header",        "Medium", "Set X-Frame-Options: DENY or SAMEORIGIN."),
@@ -99,8 +93,5 @@ def parse_nikto(output: str, task_id: str):
                 evidence=clean,
                 remediation="Review the reported configuration issue."
             ))
->>>>>>> origin/main
-=======
->>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
 
     return findings

@@ -3,22 +3,21 @@
 # ==========================================
 
 # ------------------------------------------
+# P1 & Shared (Orchestrator, Schemas, Memory)
 # ------------------------------------------
-pydantic>=2.0.0
-openai>=1.0.0
-chromadb>=0.4.0
+pydantic==2.6.4
+openai==1.14.0
+chromadb==0.4.24
+ollama==0.1.7
 
 # ------------------------------------------
-# ------------------------------------------
-# Note: P2 relies on the shared core above. 
-# Their specific tools (Docker, FFUF, Nikto, SQLmap) are system-level 
-# and handled via our OS bootstrap scripts.
-
-# ------------------------------------------
+# P3 (Network/AD & Reporting Agent)
 # ------------------------------------------
 pymetasploit3>=1.0.0
+cvss>=2.6
 
 # ------------------------------------------
+# Manya (ML Specialist - Fine-Tuning & RAG)
 # ------------------------------------------
 torch>=2.0.0
 transformers>=4.30.0

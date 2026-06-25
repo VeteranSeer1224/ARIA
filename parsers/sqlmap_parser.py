@@ -1,11 +1,6 @@
 # parsers/sqlmap_parser.py
 
 from schema import Finding
-
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
 def parse_sqlmap(output: str, task_id: str):
 
     findings = []
@@ -23,8 +18,6 @@ def parse_sqlmap(output: str, task_id: str):
                 remediation="Use parameterized queries."
             )
         )
-<<<<<<< HEAD
-=======
 _EVIDENCE_KEYWORDS = ("injectable", "parameter", "type:", "payload:", "title:")
 _MAX_EVIDENCE = 2000
 
@@ -53,8 +46,5 @@ def parse_sqlmap(output: str, task_id: str):
             evidence=_extract_evidence(output),
             remediation="Use parameterised queries and prepared statements."
         ))
->>>>>>> origin/main
-=======
->>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
 
     return findings

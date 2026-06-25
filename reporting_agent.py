@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 from datetime import datetime
 from cvss import CVSS3
@@ -76,14 +77,15 @@ def seed_dummy_data():
 
 def read_real_findings():
     results = collection.get(include=["documents", "metadatas"])
+    ids = results.get("ids", [])
     metadatas = results.get("metadatas", [])
     documents = results.get("documents", [])
 
     findings = []
-    for meta, doc in zip(metadatas, documents):
+    for chroma_id, meta, doc in zip(ids, metadatas, documents):
         label, score = get_severity_label(meta)
         findings.append({
-            "id": meta.get("id", "UNKNOWN"),
+            "id": chroma_id,
             "title": meta.get("title", "Untitled finding"),
             "surface": meta.get("surface", "unknown"),
             "severity_label": label,
@@ -107,11 +109,18 @@ def deduplicate(findings):
 
 
 def generate_report(findings):
+    if not findings:
+        return (
+            f"# ARIA Penetration Test Report\n"
+            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            "No findings were present in ChromaDB at the time this report was generated.\n"
+        )
+
     findings = deduplicate(findings)
 
-    groups = {"CRITICAL": [], "HIGH": [], "MEDIUM": [], "LOW": [], "UNKNOWN": []}
+    groups = {"CRITICAL": [], "HIGH": [], "MEDIUM": [], "LOW": [], "NONE": [], "UNKNOWN": []}
     for f in findings:
-        groups[f["severity_label"]].append(f)
+        groups.setdefault(f["severity_label"], []).append(f)
 
     report = f"""# ARIA Penetration Test Report
 Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
@@ -126,7 +135,7 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 | High     | {len(groups['HIGH'])} |
 | Medium   | {len(groups['MEDIUM'])} |
 | Low      | {len(groups['LOW'])} |
-| Unknown  | {len(groups['UNKNOWN'])} |
+| Unknown  | {len(groups['NONE']) + len(groups['UNKNOWN'])} |
 | **Total**| **{len(findings)}** |
 
 ---
@@ -134,7 +143,7 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 ## Findings by Severity
 """
 
-    for label in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]:
+    for label in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "NONE", "UNKNOWN"]:
         group = groups[label]
         if group:
             report += f"\n### {label} Findings\n"
@@ -149,9 +158,6 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 - **Evidence:** {f['evidence']}
 - **Remediation:** {f['remediation']}
 """
-
-    if not findings:
-        report += "\nNo findings were present in ChromaDB at the time this report was generated.\n"
 
     report += """
 ---
@@ -187,6 +193,7 @@ def run(use_dummy=False):
         print(f"[*] Report saved to {output_path}")
     except OSError as e:
         print(f"[!] Failed to write report: {e}")
+        sys.exit(1)
 
     print("[*] Done!")
 
