@@ -1,0 +1,5 @@
+/admin [Status: 200, Size: 1234]
+/login [Status: 200, Size: 982]
+/dashboard [Status: 200, Size: 1567]
+/backup [Status: 403, Size: 456]
+/secret [Status: 404, Size: 23]

@@ -29,7 +29,7 @@ def add_finding(finding: Finding) -> None:
     )
     print(f"[ChromaDB] Added finding: {finding.title}")
 
-def query_findings(query_text: str, n_results: int = 5) -> List[Dict[str, Any]]: # [cite: 26]
+def query_findings(query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
     """Retrieves relevant findings for cross-surface correlation."""
     results = collection.query(
         query_texts=[query_text],
@@ -37,7 +37,7 @@ def query_findings(query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
     )
     return results
 
-def get_task_context(task_id: str) -> List[Dict[str, Any]]: # [cite: 26]
+def get_task_context(task_id: str) -> List[Dict[str, Any]]:
     """Retrieves all findings associated with a specific task."""
     results = collection.get(
         where={"task_id": task_id}
