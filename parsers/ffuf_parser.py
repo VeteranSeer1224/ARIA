@@ -1,9 +1,6 @@
 # parsers/ffuf_parser.py
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
+
 from schema import Finding
 
 def parse_ffuf(output: str, task_id: str):
@@ -29,8 +26,6 @@ def parse_ffuf(output: str, task_id: str):
             )
 
             findings.append(finding)
-<<<<<<< HEAD
-=======
 import re
 from schema import Finding
 
@@ -57,8 +52,6 @@ def parse_ffuf(output: str, task_id: str):
             evidence=clean,
             remediation="Review endpoint exposure and restrict access if unnecessary."
         ))
->>>>>>> origin/main
-=======
->>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
+
 
     return findings
