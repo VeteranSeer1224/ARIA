@@ -1,0 +1,7 @@
+admin
+login
+images
+uploads
+robots.txt
+index.php
+
