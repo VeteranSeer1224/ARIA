@@ -1,10 +1,11 @@
 import os
+import sys
 import argparse
 from datetime import datetime
 from cvss import CVSS3
 from db import collection
 
-# NOTE: --seed is for local testing only, not part of production pipeline
+
 def get_severity_label(meta):
     """
     Computes the real CVSS 3.1 base score from the severity vector string
@@ -21,69 +22,17 @@ def get_severity_label(meta):
         return "UNKNOWN", None
 
 
-def seed_dummy_data():
-    """Only used for testing. Upserts so re-running --seed never crashes."""
-    dummy = [
-        {
-            "id": "F001", "task_id": "T001", "surface": "web",
-            "title": "SQL Injection in /login endpoint",
-            "description": "The username parameter is not sanitised, allowing SQL injection.",
-            "severity": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-            "evidence": "SQLmap extracted 847 rows from the users table.",
-            "remediation": "Use parameterised queries.",
-        },
-        {
-            "id": "F002", "task_id": "T002", "surface": "network",
-            "title": "SMB Vulnerability on 192.168.10.12",
-            "description": "Unpatched SMB service vulnerable to RCE.",
-            "severity": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-            "evidence": "Metasploit gained command execution via SMB exploit.",
-            "remediation": "Patch SMB. Disable SMBv1.",
-        },
-        {
-            "id": "F003", "task_id": "T003", "surface": "web",
-            "title": "Directory Listing Enabled on /backup",
-            "description": "The /backup directory is publicly browsable.",
-            "severity": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
-            "evidence": "FFUF discovered /backup/db.sql.",
-            "remediation": "Disable directory listing.",
-        },
-        {
-            "id": "F004", "task_id": "T004", "surface": "ad",
-            "title": "Weak credentials valid across domain",
-            "description": "Credential admin:hunter2 works on 14 domain machines.",
-            "severity": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
-            "evidence": "CrackMapExec confirmed credential valid on 14 machines.",
-            "remediation": "Enforce strong password policy and MFA.",
-        },
-    ]
-    for f in dummy:
-        collection.upsert(
-            documents=[f["description"]],
-            metadatas=[{
-                "id": f["id"],
-                "task_id": f["task_id"],
-                "surface": f["surface"],
-                "title": f["title"],
-                "severity": f["severity"],
-                "evidence": f["evidence"],
-                "remediation": f["remediation"],
-            }],
-            ids=[f["id"]]
-        )
-    print(f"[*] Seeded {len(dummy)} dummy findings into ChromaDB (upsert, safe to re-run)")
-
-
 def read_real_findings():
     results = collection.get(include=["documents", "metadatas"])
+    ids = results.get("ids", [])
     metadatas = results.get("metadatas", [])
     documents = results.get("documents", [])
 
     findings = []
-    for meta, doc in zip(metadatas, documents):
+    for chroma_id, meta, doc in zip(ids, metadatas, documents):
         label, score = get_severity_label(meta)
         findings.append({
-            "id": meta.get("id", "UNKNOWN"),
+            "id": chroma_id,
             "title": meta.get("title", "Untitled finding"),
             "surface": meta.get("surface", "unknown"),
             "severity_label": label,
@@ -96,22 +45,17 @@ def read_real_findings():
     return findings
 
 
-def deduplicate(findings):
-    seen = set()
-    unique = []
-    for f in findings:
-        if f["id"] not in seen:
-            seen.add(f["id"])
-            unique.append(f)
-    return unique
-
-
 def generate_report(findings):
-    findings = deduplicate(findings)
+    if not findings:
+        return (
+            f"# ARIA Penetration Test Report\n"
+            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            "No findings were present in ChromaDB at the time this report was generated.\n"
+        )
 
-    groups = {"CRITICAL": [], "HIGH": [], "MEDIUM": [], "LOW": [], "UNKNOWN": []}
+    groups = {"CRITICAL": [], "HIGH": [], "MEDIUM": [], "LOW": [], "NONE": [], "UNKNOWN": []}
     for f in findings:
-        groups[f["severity_label"]].append(f)
+        groups.setdefault(f["severity_label"], []).append(f)
 
     report = f"""# ARIA Penetration Test Report
 Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
@@ -126,7 +70,7 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 | High     | {len(groups['HIGH'])} |
 | Medium   | {len(groups['MEDIUM'])} |
 | Low      | {len(groups['LOW'])} |
-| Unknown  | {len(groups['UNKNOWN'])} |
+| Unknown  | {len(groups['NONE']) + len(groups['UNKNOWN'])} |
 | **Total**| **{len(findings)}** |
 
 ---
@@ -134,7 +78,7 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 ## Findings by Severity
 """
 
-    for label in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]:
+    for label in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "NONE", "UNKNOWN"]:
         group = groups[label]
         if group:
             report += f"\n### {label} Findings\n"
@@ -150,9 +94,6 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 - **Remediation:** {f['remediation']}
 """
 
-    if not findings:
-        report += "\nNo findings were present in ChromaDB at the time this report was generated.\n"
-
     report += """
 ---
 
@@ -167,11 +108,8 @@ severity issues first, then re-scan to confirm fixes.
     return report
 
 
-def run(use_dummy=False):
+def run():
     print("[*] Reporting Agent v1 started...")
-
-    if use_dummy:
-        seed_dummy_data()
 
     findings = read_real_findings()
     print(f"[*] Retrieved {len(findings)} findings from ChromaDB")
@@ -187,12 +125,12 @@ def run(use_dummy=False):
         print(f"[*] Report saved to {output_path}")
     except OSError as e:
         print(f"[!] Failed to write report: {e}")
+        sys.exit(1)
 
     print("[*] Done!")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--seed", action="store_true", help="Seed dummy findings before generating report")
     args = parser.parse_args()
-    run(use_dummy=args.seed)
+    run()
