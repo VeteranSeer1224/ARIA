@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from openai import OpenAI
 from typing import List
 
@@ -127,6 +128,12 @@ class AriaOrchestrator:
 
                     findings = run_web_agent(task)
 
+<<<<<<< HEAD
+=======
+                    task.status = "completed"
+                    task.completed_at = datetime.utcnow()
+
+>>>>>>> origin/main
                     print(
                         f"[Orchestrator] Task {task.id} "
                         f"completed. Generated "
@@ -139,6 +146,12 @@ class AriaOrchestrator:
 
                     finding_ids = mock_network_agent(task)
 
+<<<<<<< HEAD
+=======
+                    task.status = "completed"
+                    task.completed_at = datetime.utcnow()
+
+>>>>>>> origin/main
                     print(
                         f"[Orchestrator] Task {task.id} "
                         f"completed. Generated "
