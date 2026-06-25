@@ -4,7 +4,7 @@ from datetime import datetime
 from cvss import CVSS3
 from db import collection
 
-
+# NOTE: --seed is for local testing only, not part of production pipeline
 def get_severity_label(meta):
     """
     Computes the real CVSS 3.1 base score from the severity vector string
