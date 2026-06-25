@@ -128,9 +128,15 @@ class AriaOrchestrator:
 
                     findings = run_web_agent(task)
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
                     task.status = "completed"
                     task.completed_at = datetime.utcnow()
 
+>>>>>>> origin/main
+=======
+>>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
                     print(
                         f"[Orchestrator] Task {task.id} "
                         f"completed. Generated "
@@ -143,9 +149,15 @@ class AriaOrchestrator:
 
                     finding_ids = mock_network_agent(task)
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
                     task.status = "completed"
                     task.completed_at = datetime.utcnow()
 
+>>>>>>> origin/main
+=======
+>>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
                     print(
                         f"[Orchestrator] Task {task.id} "
                         f"completed. Generated "

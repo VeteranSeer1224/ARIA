@@ -1,6 +1,7 @@
 import subprocess
 
 def run_nikto(url: str, timeout: int = 300) -> str:
+def run_nikto(url: str) -> str:
     """
     Runs Nikto against a target URL and returns raw output.
     """
@@ -12,6 +13,10 @@ def run_nikto(url: str, timeout: int = 300) -> str:
             url
         ],
         capture_output=True,
+        text=True
+    )
+
+    return result.stdout + result.stderr
         text=True,
         timeout=timeout
     )
