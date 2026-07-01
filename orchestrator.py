@@ -1,15 +1,16 @@
 import json
 import os
 from datetime import datetime
-from openai import OpenAI
 from typing import List
+
+from openai import OpenAI
 
 from schema import Task
 
-# REAL WEB AGENT
+# Real Web Agent (P2)
 from agents.web_agent import run_web_agent
 
-# KEEP NETWORK STUB FOR P3
+# Network stub (P3)
 from stubs import mock_network_agent
 
 from db import get_task_context
@@ -76,9 +77,7 @@ class AriaOrchestrator:
 
             else:
 
-                raw_tasks = json.loads(
-                    content
-                ).get("tasks", [])
+                raw_tasks = json.loads(content).get("tasks", [])
 
             tasks = []
 
@@ -128,15 +127,9 @@ class AriaOrchestrator:
 
                     findings = run_web_agent(task)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
                     task.status = "completed"
                     task.completed_at = datetime.utcnow()
 
->>>>>>> origin/main
-=======
->>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
                     print(
                         f"[Orchestrator] Task {task.id} "
                         f"completed. Generated "
@@ -149,15 +142,9 @@ class AriaOrchestrator:
 
                     finding_ids = mock_network_agent(task)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
                     task.status = "completed"
                     task.completed_at = datetime.utcnow()
 
->>>>>>> origin/main
-=======
->>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
                     print(
                         f"[Orchestrator] Task {task.id} "
                         f"completed. Generated "
@@ -185,9 +172,8 @@ class AriaOrchestrator:
 
 if __name__ == "__main__":
 
-    orchestrator = AriaOrchestrator(
-        api_key="your_test_key_here"
-    )
+    # Uses the DEEPSEEK_API_KEY environment variable
+    orchestrator = AriaOrchestrator()
 
     test_scope = (
         "192.168.1.0/24 internal network "

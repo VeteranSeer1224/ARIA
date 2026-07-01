@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+
+  victim:
+    image: vulnerables/web-dvwa
+    container_name: dvwa
+
+    ports:
+      - "8080:80"
+
+    networks:
+      - aria-network
+
+  attacker:
+    build: .
+    container_name: aria-attacker
+
+    depends_on:
+      - victim
+
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+
+    networks:
+      - aria-network
+
+    stdin_open: true
+    tty: true
+
+    command: python orchestrator.py
+
+networks:
+  aria-network:
+    driver: bridge
