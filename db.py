@@ -3,22 +3,10 @@ import chromadb
 from schema import Finding
 from typing import List, Dict, Any
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-# Initialize ChromaDB client 
-chroma_client = chromadb.Client()
-collection = chroma_client.get_or_create_collection(name="aria_findings") # [cite: 23]
-=======
 _DB_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "chroma_store"
 )
->>>>>>> origin/main
-=======
-# Initialize ChromaDB client 
-chroma_client = chromadb.Client()
-collection = chroma_client.get_or_create_collection(name="aria_findings") # [cite: 23]
->>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
 
 chroma_client = chromadb.PersistentClient(path=_DB_PATH)
 collection = chroma_client.get_or_create_collection(name="aria_findings")

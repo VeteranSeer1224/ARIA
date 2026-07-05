@@ -172,13 +172,12 @@ class AriaOrchestrator:
 
 if __name__ == "__main__":
 
-    # Uses the DEEPSEEK_API_KEY environment variable
+    # Uses the DEEPSEEK_API_KEY environment variable.
+    # TARGET_URL defaults to the victim service hostname set in docker-compose.yml.
     orchestrator = AriaOrchestrator()
 
-    test_scope = (
-        "192.168.1.0/24 internal network "
-        "and http://dvwa.local"
-    )
+    target_url = os.getenv("TARGET_URL", "http://victim")
+    test_scope = f"web application at {target_url}"
 
     planned_tasks = orchestrator.plan_attack(
         test_scope
