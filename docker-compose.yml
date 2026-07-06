@@ -11,13 +11,23 @@ services:
 
     networks:
       - aria-network
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   attacker:
     build: .
     container_name: aria-attacker
 
+    volumes:
+      - ./chroma_store:/app/chroma_store
+
     depends_on:
-      - victim
+      victim:
+        condition: service_healthy
 
     environment:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}

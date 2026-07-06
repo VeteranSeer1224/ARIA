@@ -13,7 +13,6 @@ WORKDIR /app
 # --------------------------------------------------
 
 RUN apt-get update && apt-get install -y \
-    ffuf \
     nikto \
     sqlmap \
     git \
@@ -22,12 +21,21 @@ RUN apt-get update && apt-get install -y \
     nmap \
     dnsutils \
     net-tools \
+    perl \
+    libwww-perl \
+    openssl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # --------------------------------------------------
 # Install Python dependencies
 # --------------------------------------------------
+RUN wget https://github.com/ffuf/ffuf/releases/latest/download/ffuf_2.1.0_linux_amd64.tar.gz \
+    && tar -xzf ffuf_2.1.0_linux_amd64.tar.gz \
+    && mv ffuf /usr/local/bin/ \
+    && chmod +x /usr/local/bin/ffuf \
+    && rm ffuf_2.1.0_linux_amd64.tar.gz
+
 
 COPY requirements.txt .
 
