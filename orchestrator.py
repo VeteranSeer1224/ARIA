@@ -67,12 +67,19 @@ class AriaOrchestrator:
 
             content = response.choices[0].message.content
 
-            if "{" in content and "tasks" not in content.lower():
-                raw_tasks = json.loads(content)
-                if isinstance(raw_tasks, dict):
-                    raw_tasks = list(raw_tasks.values())[0]
+            parsed = json.loads(content)
+            if isinstance(parsed, list):
+                raw_tasks = parsed
+            elif isinstance(parsed, dict):
+                # Try a 'tasks' key first, then fall back to the first list value
+                if "tasks" in parsed and isinstance(parsed["tasks"], list):
+                    raw_tasks = parsed["tasks"]
+                else:
+                    raw_tasks = next(
+                        (v for v in parsed.values() if isinstance(v, list)), []
+                    )
             else:
-                raw_tasks = json.loads(content).get("tasks", [])
+                raw_tasks = []
 
             tasks = []
             for rt in raw_tasks:
@@ -97,6 +104,11 @@ class AriaOrchestrator:
 
         web_tasks = [t for t in tasks if t.type == "web"]
         network_tasks = [t for t in tasks if t.type in ["network", "ad"]]
+
+        for task in tasks:
+            if task.type not in ("web", "network", "ad"):
+                print(f"[Orchestrator] Unknown task type '{task.type}' for Task {task.id} — skipping.")
+                task.status = "failed"
 
         print("\n[Orchestrator] === PHASE 1: WEB RECON & EXPLOITATION ===")
         for task in web_tasks:
