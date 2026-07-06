@@ -1,18 +1,19 @@
 import json
 import os
 from datetime import datetime
-from openai import OpenAI
 from typing import List
+
+from openai import OpenAI
 
 from schema import Task
 
-# REAL WEB AGENT
+# Real Web Agent (P2)
 from agents.web_agent import run_web_agent
 
-# KEEP NETWORK STUB FOR P3
+# Network stub (P3)
 from stubs import mock_network_agent
 
-from db import get_task_context
+from db import get_task_context, query_credentials
 
 
 class AriaOrchestrator:
@@ -49,7 +50,6 @@ class AriaOrchestrator:
         )
 
         try:
-
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -67,60 +67,62 @@ class AriaOrchestrator:
 
             content = response.choices[0].message.content
 
-            if "{" in content and "tasks" not in content.lower():
-
-                raw_tasks = json.loads(content)
-
-                if isinstance(raw_tasks, dict):
-                    raw_tasks = list(raw_tasks.values())[0]
-
+            parsed = json.loads(content)
+            if isinstance(parsed, list):
+                raw_tasks = parsed
+            elif isinstance(parsed, dict):
+                # Try a 'tasks' key first, then fall back to the first list value
+                if "tasks" in parsed and isinstance(parsed["tasks"], list):
+                    raw_tasks = parsed["tasks"]
+                else:
+                    raw_tasks = next(
+                        (v for v in parsed.values() if isinstance(v, list)), []
+                    )
             else:
-
-                raw_tasks = json.loads(
-                    content
-                ).get("tasks", [])
+                raw_tasks = []
 
             tasks = []
-
             for rt in raw_tasks:
-
                 task = Task(
                     type=rt["type"],
                     target=rt["target"]
                 )
-
                 tasks.append(task)
 
-            print(
-                f"[Orchestrator] Generated "
-                f"{len(tasks)} tasks."
-            )
-
+            print(f"[Orchestrator] Generated {len(tasks)} tasks.")
             return tasks
 
         except Exception as e:
-
-            print(
-                f"[Orchestrator] Error during planning: {e}"
-            )
-
+            print(f"[Orchestrator] Error during planning: {e}")
             return []
 
     def route_and_execute(self, tasks: List[Task]):
         """
-        Routes Task objects to the correct agent.
+        Routes Task objects to the correct agent in distinct phases
+        to enable cross-surface credential handoff.
         """
 
+        web_tasks = [t for t in tasks if t.type == "web"]
+        network_tasks = [t for t in tasks if t.type in ["network", "ad"]]
+
         for task in tasks:
+            if task.type not in ("web", "network", "ad"):
+                print(f"[Orchestrator] Unknown task type '{task.type}' for Task {task.id} — skipping.")
+                task.status = "failed"
 
+        print("\n[Orchestrator] === PHASE 1: WEB RECON & EXPLOITATION ===")
+        for task in web_tasks:
             task.status = "in_progress"
-
-            print(
-                f"\n[Orchestrator] Routing Task "
-                f"{task.id} ({task.type}) -> {task.target}"
-            )
-
+            print(f"\n[Orchestrator] Routing Task {task.id} ({task.type}) -> {task.target}")
             try:
+                task.assigned_agent = "Web Agent (P2)"
+                findings = run_web_agent(task)
+                task.status = "completed"
+                task.completed_at = datetime.utcnow()
+                print(f"[Orchestrator] Task {task.id} completed. Generated {len(findings)} findings.")
+            except Exception as e:
+                print(f"[Orchestrator] Agent execution failed for Task {task.id}: {e}")
+                task.status = "failed"
 
                 if task.type == "web":
 
@@ -154,39 +156,35 @@ class AriaOrchestrator:
 
                 else:
 
-                    print(
-                        f"[Orchestrator] Unknown task type: "
-                        f"{task.type}"
-                    )
+        print("\n[Orchestrator] === PHASE 3: NETWORK & AD EXPLOITATION ===")
+        for task in network_tasks:
+            task.status = "in_progress"
+            print(f"\n[Orchestrator] Routing Task {task.id} ({task.type}) -> {task.target}")
 
-                    task.status = "failed"
+            if found_creds:
+                print(f"[Orchestrator] Injecting {len(found_creds)} credential(s) into Network Agent.")
 
+            try:
+                task.assigned_agent = "Network/AD Agent (P3)"
+                finding_ids = mock_network_agent(task, found_creds=found_creds)
+                task.status = "completed"
+                task.completed_at = datetime.utcnow()
+                print(f"[Orchestrator] Task {task.id} completed. Generated {len(finding_ids)} findings.")
             except Exception as e:
-
-                print(
-                    f"[Orchestrator] Agent execution failed "
-                    f"for Task {task.id}: {e}"
-                )
-
+                print(f"[Orchestrator] Agent execution failed for Task {task.id}: {e}")
                 task.status = "failed"
 
 
 if __name__ == "__main__":
 
-    orchestrator = AriaOrchestrator(
-        api_key="your_test_key_here"
-    )
+    # Uses the DEEPSEEK_API_KEY environment variable.
+    # TARGET_URL defaults to the victim service hostname set in docker-compose.yml.
+    orchestrator = AriaOrchestrator()
 
-    test_scope = (
-        "192.168.1.0/24 internal network "
-        "and http://dvwa.local"
-    )
+    target_url = os.getenv("TARGET_URL", "http://victim")
+    test_scope = f"web application at {target_url}"
 
-    planned_tasks = orchestrator.plan_attack(
-        test_scope
-    )
+    planned_tasks = orchestrator.plan_attack(test_scope)
 
     if planned_tasks:
-        orchestrator.route_and_execute(
-            planned_tasks
-        )
+        orchestrator.route_and_execute(planned_tasks)
