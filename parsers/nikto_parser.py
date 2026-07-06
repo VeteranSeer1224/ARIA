@@ -1,48 +1,6 @@
 # parsers/nikto_parser.py
-
 from schema import Finding
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
-def parse_nikto(output: str, task_id: str):
-
-    findings = []
-
-    lines = output.splitlines()
-
-    for line in lines:
-
-        if "X-Frame-Options" in line:
-
-            findings.append(
-                Finding(
-                    task_id=task_id,
-                    surface="web",
-                    title="Missing X-Frame-Options Header",
-                    description=line,
-                    severity="Medium",
-                    evidence=line,
-                    remediation="Configure X-Frame-Options header."
-                )
-            )
-
-        elif "Server leaks" in line:
-
-            findings.append(
-                Finding(
-                    task_id=task_id,
-                    surface="web",
-                    title="Information Disclosure",
-                    description=line,
-                    severity="Low",
-                    evidence=line,
-                    remediation="Hide server version information."
-                )
-            )
-<<<<<<< HEAD
-=======
 # (keyword, title, severity, remediation)
 _RULES = [
     ("X-Frame-Options",  "Missing X-Frame-Options Header",        "Medium", "Set X-Frame-Options: DENY or SAMEORIGIN."),
@@ -64,17 +22,14 @@ _META_PREFIXES = ("+ Target IP", "+ Target Hostname", "+ Target Port",
 
 def parse_nikto(output: str, task_id: str):
     findings = []
-
     for line in output.splitlines():
         if not line.startswith("+ "):
             continue
         if line.startswith(_META_PREFIXES):
             continue
-
         clean = line.strip()
         clean_lower = clean.lower()
         matched = False
-
         for keyword, title, severity, remediation in _RULES:
             if keyword.lower() in clean_lower:
                 findings.append(Finding(
@@ -88,7 +43,6 @@ def parse_nikto(output: str, task_id: str):
                 ))
                 matched = True
                 break
-
         if not matched:
             findings.append(Finding(
                 task_id=task_id,
@@ -99,8 +53,4 @@ def parse_nikto(output: str, task_id: str):
                 evidence=clean,
                 remediation="Review the reported configuration issue."
             ))
->>>>>>> origin/main
-=======
->>>>>>> d7b09bd77237d9a109218e5d7207740fe0fca8f5
-
     return findings
