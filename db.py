@@ -11,6 +11,7 @@ _DB_PATH = os.path.join(
 chroma_client = chromadb.PersistentClient(path=_DB_PATH)
 collection = chroma_client.get_or_create_collection(name="aria_findings")
 
+
 def add_finding(finding: Finding) -> None:
     """Writes a parsed Finding object into ChromaDB."""
     collection.upsert(
@@ -28,6 +29,7 @@ def add_finding(finding: Finding) -> None:
         ids=[finding.id]
     )
     print(f"[ChromaDB] Added finding: {finding.title}")
+
 
 def query_findings(query_text: str, n_results: int = 5) -> Dict[str, Any]:
     """Retrieves relevant findings for cross-surface correlation."""
@@ -65,6 +67,7 @@ def clear_findings() -> None:
     if count > 0:
         ids = collection.get(limit=count)["ids"]
         collection.delete(ids=ids)
+
 
 def get_task_context(task_id: str) -> List[Dict[str, Any]]:
     """Retrieves all findings associated with a specific task."""
