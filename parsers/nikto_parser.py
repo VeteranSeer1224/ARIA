@@ -53,4 +53,5 @@ def parse_nikto(output: str, task_id: str):
                 evidence=clean,
                 remediation="Review the reported configuration issue."
             ))
+
     return findings

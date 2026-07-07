@@ -1,7 +1,10 @@
 [INFO] testing connection to the target URL
+
 [INFO] testing if the parameter 'id' is dynamic
 
 [INFO] parameter 'id' appears to be injectable
+
+[INFO] testing for SQL injection on parameter 'id'
 
 Type: boolean-based blind
 Title: AND boolean-based blind - WHERE or HAVING clause
@@ -9,5 +12,15 @@ Title: AND boolean-based blind - WHERE or HAVING clause
 Payload: id=1 AND 1234=1234
 
 [INFO] the back-end DBMS is MySQL
-web application technology: PHP
+
+web application technology: PHP 8.1
 back-end DBMS: MySQL >= 5.0
+
+[INFO] fetched data logged to text files under '/home/user/.local/share/sqlmap/output'
+
+sqlmap identified the following injection point(s) with a total of 12 HTTP requests:
+---
+Parameter: id (GET)
+    Type: boolean-based blind
+    Title: AND boolean-based blind - WHERE or HAVING clause
+---

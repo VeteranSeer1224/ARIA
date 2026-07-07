@@ -28,4 +28,5 @@ def parse_sqlmap(output: str, task_id: str):
             evidence=_extract_evidence(output),
             remediation="Use parameterised queries and prepared statements."
         ))
+
     return findings
