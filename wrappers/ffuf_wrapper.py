@@ -13,7 +13,7 @@ WORDLIST = SECLIST_PATH if os.path.exists(SECLIST_PATH) else FALLBACK_PATH
 
 def run_ffuf(url: str, timeout: int = 120) -> str:
     """
-    Runs FFUF against a target URL and returns raw output.
+    Runs FFUF against a target URL and returns raw stdout output.
     Uses SecLists common.txt for real endpoint discovery.
     """
     result = subprocess.run(
@@ -21,8 +21,6 @@ def run_ffuf(url: str, timeout: int = 120) -> str:
             "ffuf",
             "-u", f"{url}/FUZZ",
             "-w", WORDLIST,
-            "-o", "/tmp/ffuf_output.json",
-            "-of", "json",
             "-mc", "200,204,301,302,307,401,403"
         ],
         capture_output=True,
@@ -33,16 +31,9 @@ def run_ffuf(url: str, timeout: int = 120) -> str:
     output = result.stdout + result.stderr
 
     if result.returncode != 0:
-        failure_markers = [
-            "no such file",
-            "connection refused",
-            "could not connect",
-        ]
-        lowered = output.lower()
-        if any(m in lowered for m in failure_markers):
-            raise RuntimeError(
-                f"ffuf exited with code {result.returncode}: "
-                f"{result.stderr.strip()[:500]}"
-            )
+        raise RuntimeError(
+            f"ffuf exited with code {result.returncode}: "
+            f"{result.stderr.strip()[:500]}"
+        )
 
     return output
