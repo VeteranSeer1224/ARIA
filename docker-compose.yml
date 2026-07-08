@@ -9,6 +9,10 @@ services:
     ports:
       - "8080:80"
 
+    environment:
+      MYSQL_ROOT_PASSWORD: dvwa
+      DVWA_SECURITY: low
+
     networks:
       - aria-network
     
