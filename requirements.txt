@@ -15,6 +15,7 @@ ollama==0.1.7
 # ------------------------------------------
 pymetasploit3>=1.0.0
 cvss>=2.6
+defusedxml>=0.7.1
 
 # ------------------------------------------
 # Manya (ML Specialist - Fine-Tuning & RAG)
