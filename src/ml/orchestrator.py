@@ -5,16 +5,15 @@ The Orchestrator reasons, delegates, and coordinates. It never executes offensiv
 
 import json
 import os
-import sys
+import traceback
 from datetime import datetime
 from typing import List
 
 from openai import OpenAI
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from schema import Task, Finding
+from schema import Task
 
-from .models import TargetScope, TaskQueue
+from .models import Finding, TargetScope, TaskQueue
 
 
 # ── State ────────────────────────────────────────────────────────
@@ -86,6 +85,7 @@ class Planner:
 
         except Exception as e:
             print(f"[Planner] Error during planning with LLM: {e}. Falling back to deterministic planning.")
+            traceback.print_exc()
             for domain in scope.domains:
                 if domain not in scope.exclusions:
                     task = Task(type="web", target=domain)
@@ -104,7 +104,12 @@ class Planner:
         print(f"[Planner] Updating plan with {len(findings)} new findings.")
         for finding in findings:
             if "port 80" in finding.description.lower() or "web" in finding.description.lower():
-                new_task = Task(type="web", target=finding.evidence)
+                # Derive target from asset/target, not evidence (which is descriptive text)
+                target = getattr(finding, 'asset', None) or getattr(finding, 'target', None)
+                if not target:
+                    print(f"[Planner] Skipping finding '{finding.title}': no usable target.")
+                    continue
+                new_task = Task(type="web", target=target)
                 if not state.has_task_run(new_task):
                     print(f"[Planner] Discovered new web task from finding: {new_task.target}")
                     state.queue.enqueue(new_task)
@@ -120,12 +125,6 @@ class Scheduler:
 
     def next_task(self, memory=None) -> Task:
         """Returns the next task, prioritized: web → network → ad."""
-        if len(self.state.queue) == 0:
-            return None
-
-        priority_map = {"web": 1, "network": 2, "ad": 3}
-        self.state.queue.tasks.sort(key=lambda t: priority_map.get(t.type, 99))
-
         return self.state.queue.dequeue()
 
 
@@ -164,7 +163,13 @@ class Router:
                 print(f"[Router] Unknown task type: {task.type}")
                 task.status = "failed"
                 return []
+        except ImportError as e:
+            print(f"[Router] Missing agent module for Task {task.id}: {e}")
+            traceback.print_exc()
+            task.status = "failed"
+            return []
         except Exception as e:
             print(f"[Router] Agent execution failed for Task {task.id}: {e}")
+            traceback.print_exc()
             task.status = "failed"
             return []

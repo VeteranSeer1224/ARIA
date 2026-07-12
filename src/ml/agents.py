@@ -6,13 +6,12 @@ execute tool wrappers, and return standardized findings.
 import abc
 import logging
 import time
-import sys
-import os
 from typing import List, Any
 from datetime import datetime
+import traceback
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from schema import Task, Finding
+from schema import Task
+from .models import Finding
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -70,7 +69,7 @@ class WebAgent(BaseAgent):
                 )
                 findings.append(self.publish(finding))
         except Exception as e:
-            self.logger.error(f"Execution failed: {e}")
+            self.logger.error(f"Execution failed: {e}", exc_info=True)
 
         return findings
 
@@ -108,7 +107,7 @@ class NetworkAgent(BaseAgent):
                 )
                 findings.append(self.publish(finding))
         except Exception as e:
-            self.logger.error(f"Execution failed: {e}")
+            self.logger.error(f"Execution failed: {e}", exc_info=True)
 
         return findings
 

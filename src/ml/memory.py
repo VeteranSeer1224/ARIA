@@ -16,7 +16,7 @@ from .models import Finding
 
 class EmbeddingModel:
     """SentenceTransformer embeddings with offline-safe hash fallback."""
-    def __init__(self, use_offline_hash=True):
+    def __init__(self, use_offline_hash=False):
         self.use_offline_hash = use_offline_hash
         if not use_offline_hash:
             try:
@@ -26,13 +26,16 @@ class EmbeddingModel:
                 print("SentenceTransformer not installed, falling back to hash embeddings.")
                 self.use_offline_hash = True
 
+    # MiniLM output dimension — hash mode must match to avoid Chroma errors.
+    EMBEDDING_DIM = 384
+
     def embed(self, text: str) -> List[float]:
         if self.use_offline_hash:
             dims = []
-            for i in range(8):
+            for i in range(12):
                 hi = hashlib.sha256(f"{text}_{i}".encode()).digest()
                 dims.extend([float(b) / 255.0 for b in hi])
-            return dims[:256]
+            return dims[:self.EMBEDDING_DIM]
         else:
             return self.model.encode([text])[0].tolist()
 
@@ -75,18 +78,25 @@ class ChromaStore:
                     cleaned[k] = v
         return cleaned
 
+    @staticmethod
+    def _content_id(finding: Finding) -> str:
+        """Deterministic ID from title+evidence so content-identical findings dedupe."""
+        sig = f"{finding.title}:{finding.evidence}"
+        return hashlib.sha256(sig.encode()).hexdigest()
+
     def store_finding(self, finding: Finding):
-        """Store a finding with duplicate suppression via upsert."""
+        """Store a finding with content-level duplicate suppression via upsert."""
         doc = self._prepare_document(finding)
         emb = self.embedder.embed(doc)
         meta = self._prepare_metadata(finding)
 
-        # Deduplication: upsert ensures duplicate IDs overwrite rather than duplicate
-        existing = self.collection.get(ids=[finding.id])
+        # Deduplicate by content signature, not uuid4 (which is always unique)
+        content_id = self._content_id(finding)
+        existing = self.collection.get(ids=[content_id], include=[])
         is_duplicate = len(existing["ids"]) > 0
 
         self.collection.upsert(
-            ids=[finding.id],
+            ids=[content_id],
             documents=[doc],
             embeddings=[emb],
             metadatas=[meta]

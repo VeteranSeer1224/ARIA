@@ -7,10 +7,8 @@ from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
 from datetime import datetime
 import uuid
-import sys
-import os
+import heapq
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from schema import Task
 
 
@@ -24,20 +22,26 @@ class TargetScope(BaseModel):
 
 
 class TaskQueue:
-    """FIFO queue of Task objects for the Orchestrator."""
+    """Heap-backed priority queue of Task objects for the Orchestrator."""
+
+    PRIORITY_MAP = {"web": 1, "network": 2, "ad": 3}
+
     def __init__(self):
-        self.tasks: List[Task] = []
+        self._heap: list = []
+        self._counter: int = 0
 
     def enqueue(self, task: Task):
-        self.tasks.append(task)
+        priority = self.PRIORITY_MAP.get(task.type, 99)
+        heapq.heappush(self._heap, (priority, self._counter, task))
+        self._counter += 1
 
     def dequeue(self) -> Task:
-        if self.tasks:
-            return self.tasks.pop(0)
+        if self._heap:
+            return heapq.heappop(self._heap)[2]
         return None
 
     def __len__(self):
-        return len(self.tasks)
+        return len(self._heap)
 
 
 # ── PRD 02: Memory / Finding Schema ─────────────────────────────

@@ -2,7 +2,7 @@ from schema import Task, Finding
 from db import add_finding
 from datetime import datetime
 
-def mock_web_agent(task: Task) -> list[str]:
+def mock_web_agent(task: Task) -> list[Finding]:
     """Simulates P2's Web Agent."""
     print(f"[Web Agent Stub] Executing task on {task.target}...")
 
@@ -20,9 +20,9 @@ def mock_web_agent(task: Task) -> list[str]:
     task.status = "completed"
     task.completed_at = datetime.utcnow()
 
-    return [mock_finding.id]
+    return [mock_finding]
 
-def mock_network_agent(task: Task, found_creds: list = None) -> list[str]:
+def mock_network_agent(task: Task, found_creds: list = None) -> list[Finding]:
     """Simulates P3's Network/AD Agent. Accepts credential context from web phase."""
     print(f"[Network Agent Stub] Executing task on {task.target}...")
 
@@ -43,9 +43,9 @@ def mock_network_agent(task: Task, found_creds: list = None) -> list[str]:
     task.status = "completed"
     task.completed_at = datetime.utcnow()
 
-    return [mock_finding.id]
+    return [mock_finding]
 
-def mock_ad_agent(task: Task) -> list[str]:
+def mock_ad_agent(task: Task) -> list[Finding]:
     """Simulates P3's AD Agent."""
     print(f"[AD Agent Stub] Executing task on {task.target}...")
 
@@ -63,4 +63,4 @@ def mock_ad_agent(task: Task) -> list[str]:
     task.status = "completed"
     task.completed_at = datetime.utcnow()
 
-    return [mock_finding.id]
+    return [mock_finding]

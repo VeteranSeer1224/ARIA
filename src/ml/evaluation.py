@@ -15,7 +15,7 @@ class MetricsCalculator:
     @staticmethod
     def calculate_tcr(completed: int, total: int) -> float:
         """Task Completion Rate (TCR)"""
-        return (completed / total) * 100 if total > 0 else 0.0
+        return (completed / total) if total > 0 else 0.0
 
     @staticmethod
     def calculate_ttc(start_time: float, compromise_time: float) -> float:
@@ -25,12 +25,12 @@ class MetricsCalculator:
     @staticmethod
     def calculate_asc(discovered_nodes: int, total_nodes: int) -> float:
         """Attack Surface Coverage (ASC)"""
-        return (discovered_nodes / total_nodes) * 100 if total_nodes > 0 else 0.0
+        return (discovered_nodes / total_nodes) if total_nodes > 0 else 0.0
 
     @staticmethod
     def calculate_far(false_actions: int, total_actions: int) -> float:
         """False Action Rate (FAR)"""
-        return (false_actions / total_actions) * 100 if total_actions > 0 else 0.0
+        return (false_actions / total_actions) if total_actions > 0 else 0.0
 
 
 # ── Scorer ───────────────────────────────────────────────────────
@@ -40,14 +40,14 @@ class Scorer:
     def __init__(self, ground_truth):
         self.ground_truth = ground_truth
 
-    def score_run(self, execution_data: dict) -> dict:
+    def score_run(self, execution_data: dict, rqs: float = None) -> dict:
         tcr = MetricsCalculator.calculate_tcr(execution_data['tasks_completed'], execution_data['total_tasks'])
         ttc = MetricsCalculator.calculate_ttc(execution_data['start_time'], execution_data['compromise_time'])
         asc = MetricsCalculator.calculate_asc(execution_data['discovered_nodes'], self.ground_truth['total_nodes'])
         far = MetricsCalculator.calculate_far(execution_data['false_actions'], execution_data['total_actions'])
 
-        # Report Quality Score (RQS) — manual or heuristic evaluation
-        rqs = 85.0
+        # Report Quality Score (RQS) — should come from manual or heuristic evaluation
+        rqs = rqs if rqs is not None else execution_data.get('rqs', 0.0)
 
         return {
             "TCR": tcr,
@@ -94,6 +94,7 @@ class ExperimentPipeline:
         self.benchmark = BenchmarkEnvironment()
 
     def run_aria(self):
+        # TODO: Wire to actual orchestrator/baseline execution — these are placeholder metrics.
         print("[Experiment] Running ARIA...")
         time.sleep(1)
         return {
@@ -108,6 +109,7 @@ class ExperimentPipeline:
         }
 
     def run_baseline(self):
+        # TODO: Wire to actual orchestrator/baseline execution — these are placeholder metrics.
         print("[Experiment] Running Baseline...")
         time.sleep(1)
         return {
@@ -136,25 +138,28 @@ class ExperimentPipeline:
 
     def export_results(self, aria_scores, baseline_scores, findings):
         """Export CSV metrics, JSON findings, and Markdown summary."""
+        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'output')
+        os.makedirs(output_dir, exist_ok=True)
+
         # Export CSV
-        with open("evaluation_metrics.csv", "w", newline='') as f:
+        with open(os.path.join(output_dir, "evaluation_metrics.csv"), "w", newline='') as f:
             writer = csv.writer(f)
             writer.writerow(["Agent", "TCR", "TTC", "ASC", "FAR", "RQS"])
             writer.writerow(["ARIA", aria_scores["TCR"], aria_scores["TTC"], aria_scores["ASC"], aria_scores["FAR"], aria_scores["RQS"]])
             writer.writerow(["Baseline", baseline_scores["TCR"], baseline_scores["TTC"], baseline_scores["ASC"], baseline_scores["FAR"], baseline_scores["RQS"]])
 
         # Export JSON
-        with open("evaluation_findings.json", "w") as f:
+        with open(os.path.join(output_dir, "evaluation_findings.json"), "w") as f:
             json.dump(findings, f, indent=2)
 
         # Export Markdown
-        with open("evaluation_summary.md", "w") as f:
+        with open(os.path.join(output_dir, "evaluation_summary.md"), "w") as f:
             f.write("# ARIA Evaluation Summary\n\n")
             f.write("## Metrics\n")
-            f.write(f"- ARIA TCR: {aria_scores['TCR']}%\n")
+            f.write(f"- ARIA TCR: {aria_scores['TCR']:.2%}\n")
             f.write(f"- ARIA TTC: {aria_scores['TTC']}s\n")
-            f.write(f"- ARIA ASC: {aria_scores['ASC']}%\n")
-            f.write(f"- ARIA FAR: {aria_scores['FAR']}%\n")
+            f.write(f"- ARIA ASC: {aria_scores['ASC']:.2%}\n")
+            f.write(f"- ARIA FAR: {aria_scores['FAR']:.2%}\n")
             f.write(f"- ARIA RQS: {aria_scores['RQS']}\n\n")
 
-        print("[Experiment] Exported results to CSV, JSON, and Markdown.")
+        print(f"[Experiment] Exported results to {output_dir} (CSV, JSON, and Markdown).")

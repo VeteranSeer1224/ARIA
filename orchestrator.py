@@ -66,10 +66,9 @@ class AriaOrchestrator:
 
             content = response.choices[0].message.content
             payload = json.loads(content)
-            raw_tasks = payload.get("tasks", [])
 
             tasks = []
-            for rt in raw_tasks:
+            for rt in payload.get("tasks", []):
                 task = Task(
                     type=rt["type"],
                     target=rt["target"]
