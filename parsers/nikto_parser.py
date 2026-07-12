@@ -1,5 +1,4 @@
 # parsers/nikto_parser.py
-
 from schema import Finding
 
 # (keyword, title, severity, remediation)
@@ -23,17 +22,14 @@ _META_PREFIXES = ("+ Target IP", "+ Target Hostname", "+ Target Port",
 
 def parse_nikto(output: str, task_id: str):
     findings = []
-
     for line in output.splitlines():
         if not line.startswith("+ "):
             continue
         if line.startswith(_META_PREFIXES):
             continue
-
         clean = line.strip()
         clean_lower = clean.lower()
         matched = False
-
         for keyword, title, severity, remediation in _RULES:
             if keyword.lower() in clean_lower:
                 findings.append(Finding(
@@ -47,7 +43,6 @@ def parse_nikto(output: str, task_id: str):
                 ))
                 matched = True
                 break
-
         if not matched:
             findings.append(Finding(
                 task_id=task_id,

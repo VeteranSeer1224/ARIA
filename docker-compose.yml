@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+
+  victim:
+    image: vulnerables/web-dvwa
+    container_name: dvwa
+
+    ports:
+      - "8080:80"
+
+    networks:
+      - aria-network
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  attacker:
+    build: .
+    container_name: aria-attacker
+
+    volumes:
+      - ./chroma_store:/app/chroma_store
+
+    depends_on:
+      victim:
+        condition: service_healthy
+
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      TARGET_URL: ${TARGET_URL:-http://victim}
+
+    networks:
+      - aria-network
+
+    stdin_open: true
+    tty: true
+
+    command: python orchestrator.py
+
+networks:
+  aria-network:
+    driver: bridge

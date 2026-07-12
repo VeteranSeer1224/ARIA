@@ -1,5 +1,4 @@
 # parsers/sqlmap_parser.py
-
 from schema import Finding
 
 _EVIDENCE_KEYWORDS = ("injectable", "parameter", "type:", "payload:", "title:")
@@ -17,10 +16,18 @@ def _extract_evidence(output: str) -> str:
     return evidence or output[:_MAX_EVIDENCE]
 
 
+_INJECTION_MARKERS = (
+    "injectable",
+    "is vulnerable",
+    "the following injection point",
+    "sqlmap identified the following injection point",
+)
+
+
 def parse_sqlmap(output: str, task_id: str):
     findings = []
-
-    if "injectable" in output.lower():
+    lowered = output.lower()
+    if any(m in lowered for m in _INJECTION_MARKERS):
         findings.append(Finding(
             task_id=task_id,
             surface="web",

@@ -15,3 +15,6 @@ chroma_store/
 aria_report.md
 __pycache__/
 *.pyc
+
+.env
+*.log
