@@ -68,20 +68,6 @@ class AriaOrchestrator:
             content = response.choices[0].message.content
             payload = json.loads(content)
 
-            parsed = json.loads(content)
-            if isinstance(parsed, list):
-                raw_tasks = parsed
-            elif isinstance(parsed, dict):
-                # Try a 'tasks' key first, then fall back to the first list value
-                if "tasks" in parsed and isinstance(parsed["tasks"], list):
-                    raw_tasks = parsed["tasks"]
-                else:
-                    raw_tasks = next(
-                        (v for v in parsed.values() if isinstance(v, list)), []
-                    )
-            else:
-                raw_tasks = []
-
             tasks = []
             for rt in payload.get("tasks", []):
                 task = Task(

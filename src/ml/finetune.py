@@ -201,7 +201,8 @@ def train(config: FineTuneConfig, dataset_path: str) -> str:
         per_device_train_batch_size=config.batch_size,
         gradient_accumulation_steps=config.grad_accum,
         learning_rate=config.learning_rate,
-        fp16=True,
+        # fp16 requires a CUDA GPU; fall back to fp32 on CPU / Apple MPS.
+        fp16=torch.cuda.is_available(),
         logging_steps=10,
         save_strategy="epoch",
         seed=config.seed,

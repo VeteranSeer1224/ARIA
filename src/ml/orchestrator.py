@@ -84,7 +84,8 @@ class Planner:
                     state.mark_task_run(task)
 
         except Exception as e:
-            print(f"[Planner] Error during planning with LLM: {e}. Falling back to deterministic planning.")
+            print(f"[Planner] {type(e).__name__} during LLM planning: {e}. "
+                  "Falling back to deterministic planning.")
             traceback.print_exc()
             for domain in scope.domains:
                 if domain not in scope.exclusions:
@@ -164,12 +165,17 @@ class Router:
                 task.status = "failed"
                 return []
         except ImportError as e:
-            print(f"[Router] Missing agent module for Task {task.id}: {e}")
+            # Missing agent module — distinct from a tool crash so it's immediately
+            # actionable: the module needs to be installed/added, not debugged.
+            print(f"[Router] !! Missing agent module for task type '{task.type}' "
+                  f"(Task {task.id}): {e}")
             traceback.print_exc()
             task.status = "failed"
             return []
         except Exception as e:
-            print(f"[Router] Agent execution failed for Task {task.id}: {e}")
+            # Real tool/agent failure — log full traceback so the root cause is visible.
+            print(f"[Router] !! Agent execution failed for Task {task.id} "
+                  f"(type={task.type}, target={task.target}): {type(e).__name__}: {e}")
             traceback.print_exc()
             task.status = "failed"
             return []

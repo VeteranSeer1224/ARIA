@@ -239,8 +239,117 @@ class SimulatedRunner:
             "findings": findings,
         }
 
+class OrchestratorRunner:
+    """
+    Real runner: wires ExperimentPipeline to an actual Planner → Scheduler →
+    Router execution so ARIA-vs-baseline comparisons reflect genuine pipeline
+    behaviour rather than SimulatedRunner's hardcoded tables.
 
-# ── Experiment pipeline ──────────────────────────────────────────
+    Usage::
+
+        from src.ml.evaluation import ExperimentPipeline, OrchestratorRunner
+        ExperimentPipeline(runner=OrchestratorRunner(api_key="...")).execute()
+
+    ``condition`` controls which model is injected into the Planner:
+      - ``"baseline"``  — plain OpenAI/DeepSeek, no ARIA fine-tuning.
+      - ``"aria_base"`` — base LLaMA 3 served locally (set base_url in env).
+      - ``"aria_tuned"`` — ARIA fine-tuned model (set base_url + model_name).
+
+    ``scenario_targets`` maps each scenario name to a TargetScope-compatible
+    dict so the runner knows which host/network to attack.  Defaults to the
+    same benchmark environment BenchmarkEnvironment describes.
+    """
+
+    # Default benchmark targets matching BenchmarkEnvironment.
+    _DEFAULT_TARGETS: dict = {
+        "web":     {"domains": ["http://dvwa.local"],         "ip_ranges": []},
+        "network": {"domains": [],                             "ip_ranges": ["192.168.10.0/24"]},
+        "ad":      {"domains": [],                             "ip_ranges": ["192.168.10.0/24"]},
+        "e2e":     {"domains": ["http://dvwa.local"],         "ip_ranges": ["192.168.10.0/24"]},
+    }
+
+    # Per-condition model endpoints.  Override by subclassing or by setting
+    # ARIA_BASE_URL / ARIA_MODEL env vars before calling execute().
+    _CONDITION_PROFILE: dict = {
+        "baseline":   {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
+        "aria_base":  {"base_url": os.getenv("ARIA_BASE_URL", "http://localhost:8000"), "model": "llama3"},
+        "aria_tuned": {"base_url": os.getenv("ARIA_BASE_URL", "http://localhost:8000"),
+                       "model": os.getenv("ARIA_MODEL", "aria-tuned")},
+    }
+
+    def __init__(self, api_key: str = None, scenario_targets: dict = None):
+        self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY", "dummy")
+        self.scenario_targets = scenario_targets or self._DEFAULT_TARGETS
+
+    def __call__(self, condition: str, scenario: str) -> dict:
+        import time
+        from .models import TargetScope, TaskQueue
+        from .orchestrator import OrchestratorState, Planner, Scheduler, Router
+
+        profile = self._CONDITION_PROFILE.get(condition, self._CONDITION_PROFILE["baseline"])
+        target_cfg = self.scenario_targets.get(scenario, {"domains": [], "ip_ranges": []})
+        scope = TargetScope(
+            domains=target_cfg.get("domains", []),
+            ip_ranges=target_cfg.get("ip_ranges", []),
+        )
+
+        state = OrchestratorState()
+        planner = Planner(api_key=self.api_key)
+        # Swap in the condition-specific endpoint / model.
+        planner.client.base_url = profile["base_url"]  # type: ignore[attr-defined]
+        planner.model = profile["model"]
+
+        t0 = time.monotonic()
+        planner.create_plan(scope, state)
+
+        scheduler = Scheduler(state)
+        router = Router()
+
+        total_tasks = len(state.queue)
+        completed = 0
+        false_actions = 0
+        all_findings: list = []
+        discovered_hosts: set = set()
+        compromise_time: float = t0
+
+        while True:
+            task = scheduler.next_task()
+            if task is None:
+                break
+            findings = router.route(task)
+            if task.status == "completed":
+                completed += 1
+                compromise_time = time.monotonic()
+                for f in findings:
+                    all_findings.append(f)
+                    asset = getattr(f, "asset", None)
+                    if asset:
+                        discovered_hosts.add(asset)
+                # Replan: discovered web services may surface new tasks.
+                if findings:
+                    planner.update_plan(findings, state)
+            else:
+                false_actions += 1
+
+        findings_as_dicts = []
+        for f in all_findings:
+            try:
+                findings_as_dicts.append(f.model_dump())
+            except AttributeError:
+                findings_as_dicts.append(dict(f) if hasattr(f, "__iter__") else {})
+
+        return {
+            "tasks_completed": completed,
+            "total_tasks": max(total_tasks, completed),
+            "start_time": t0,
+            "compromise_time": compromise_time,
+            "discovered_nodes": len(discovered_hosts),
+            "false_actions": false_actions,
+            "total_actions": completed + false_actions,
+            "findings": findings_as_dicts,
+        }
+
+
 
 class ExperimentPipeline:
     """Full experiment: load benchmark -> run 12-cell matrix -> score -> export."""
@@ -274,8 +383,12 @@ class ExperimentPipeline:
     def export_results(self, rows: list, output_dir: str = None):
         """Write the full 12-run matrix: CSV (one row per run), per-run JSON, MD."""
         if output_dir is None:
-            output_dir = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "..", "..", "output")
+            # Resolve to <repo_root>/output/ regardless of CWD.
+            # src/ml/evaluation.py is three levels deep; go up three dirs.
+            _repo_root = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
+            output_dir = os.path.join(_repo_root, "output")
         os.makedirs(output_dir, exist_ok=True)
 
         # CSV — one row per (condition, scenario); nothing is clobbered.

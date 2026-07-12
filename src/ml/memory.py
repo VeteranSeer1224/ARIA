@@ -103,8 +103,20 @@ class ChromaStore:
         sig = f"{finding.title}:{finding.evidence}"
         return hashlib.sha256(sig.encode()).hexdigest()
 
-    def store_finding(self, finding: Finding):
-        """Store a finding with content-level duplicate suppression via upsert."""
+    def store_finding(self, finding: Finding, check_duplicate: bool = False) -> bool:
+        """Store a finding with content-level duplicate suppression via upsert.
+
+        Args:
+            finding: The finding to store.
+            check_duplicate: When True, performs a get() before the upsert to
+                return whether the record already existed.  Costs an extra
+                Chroma round-trip, so leave False (the default) unless you
+                actually need the return value (e.g. audit logs or tests).
+
+        Returns:
+            True if the finding already existed (only meaningful when
+            check_duplicate=True; always False otherwise).
+        """
         # Ensure finding_type is always set so RAG metadata filters
         # (get_credentials/host_relationships) work regardless of whether the
         # producing agent bothered to set it.
@@ -114,11 +126,12 @@ class ChromaStore:
         doc = self._prepare_document(finding)
         emb = self.embedder.embed(doc)
         meta = self._prepare_metadata(finding)
-
-        # Deduplicate by content signature, not uuid4 (which is always unique)
         content_id = self._content_id(finding)
-        existing = self.collection.get(ids=[content_id], include=[])
-        is_duplicate = len(existing["ids"]) > 0
+
+        is_duplicate = False
+        if check_duplicate:
+            existing = self.collection.get(ids=[content_id], include=[])
+            is_duplicate = len(existing["ids"]) > 0
 
         self.collection.upsert(
             ids=[content_id],
