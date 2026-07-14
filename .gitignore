@@ -15,6 +15,6 @@ chroma_store/
 aria_report.md
 __pycache__/
 *.pyc
-
+graphify-out/
 .env
 *.log
