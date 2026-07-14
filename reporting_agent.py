@@ -37,17 +37,26 @@ _SEVERITY_EMOJI = {
 
 def get_severity_label(meta):
     """
-    Resolves a finding's severity to a (label, score) tuple.
-
-    Strategy:
-      1. Try parsing the severity field as a CVSS 3.1 vector string
-         (e.g. 'CVSS:3.1/AV:N/AC:L/...') via the official library.
-      2. Fall back to keyword matching ('Critical', 'High', …).
-      3. Default to UNKNOWN if neither works.
+    Computes the real CVSS 3.1 base score from the severity vector string
+    using the official formula (via the cvss library). If the severity field
+    is a plain-text label (e.g. 'Medium', 'Critical') rather than a CVSS
+    vector, it is normalised directly. Falls back to UNKNOWN if missing or
+    unrecognised.
     """
-    severity_str = meta.get("severity", "").strip()
-    if not severity_str:
-        return "UNKNOWN", None
+    severity_str = meta.get("severity", "")
+    # Try parsing as a proper CVSS vector first
+    try:
+        c = CVSS3(severity_str)
+        score = float(c.base_score)
+        label = c.severities()[0].upper()
+        return label, score
+    except Exception:
+        pass
+    # Fall back to plain-text label (e.g. stored by parsers as 'Medium')
+    normalised = severity_str.strip().lower()
+    if normalised in _PLAIN_TEXT_LABELS:
+        return normalised.upper(), None
+    return "UNKNOWN", None
 
     # ── Path 1: proper CVSS vector ──────────────────────────────
     if severity_str.upper().startswith("CVSS:"):

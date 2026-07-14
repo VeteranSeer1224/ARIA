@@ -31,10 +31,4 @@ def run_sqlmap(url: str, timeout: int = 300) -> str:
         lowered = output.lower()
         found_success = any(m in lowered for m in success_markers)
 
-        if not found_success:
-            raise RuntimeError(
-                f"sqlmap exited with code {result.returncode}: "
-                f"{result.stderr.strip()[:500]}"
-            )
-
-    return output
+    return result.stdout + result.stderr

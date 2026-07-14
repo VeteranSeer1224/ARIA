@@ -5,7 +5,6 @@ from schema import Finding
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
-
 def parse_ffuf(output: str, task_id: str):
     findings = []
     for line in output.splitlines():

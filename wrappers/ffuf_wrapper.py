@@ -10,7 +10,6 @@ FALLBACK_PATH = os.path.join(
 )
 WORDLIST = SECLIST_PATH if os.path.exists(SECLIST_PATH) else FALLBACK_PATH
 
-
 def run_ffuf(url: str, timeout: int = 120) -> str:
     """
     Runs FFUF against a target URL and returns raw stdout output.
@@ -20,8 +19,7 @@ def run_ffuf(url: str, timeout: int = 120) -> str:
         [
             "ffuf",
             "-u", f"{url}/FUZZ",
-            "-w", WORDLIST,
-            "-mc", "200,204,301,302,307,401,403"
+            "-w", WORDLIST
         ],
         capture_output=True,
         text=True,
@@ -36,4 +34,4 @@ def run_ffuf(url: str, timeout: int = 120) -> str:
             f"{result.stderr.strip()[:500]}"
         )
 
-    return output
+    return result.stdout + result.stderr
