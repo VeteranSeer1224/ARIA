@@ -289,10 +289,17 @@ def run(use_dummy=False):
     report = generate_report(findings)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    output_path = os.path.join(script_dir, "aria_report.md")
+    # Write into chroma_store/ — the only path mounted as a volume in
+    # docker-compose, so the report survives the container and is visible
+    # on the host.
+    output_dir = os.path.join(script_dir, "chroma_store")
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, "aria_report.md")
 
     try:
-        with open(output_path, "w") as f:
+        # utf-8 explicit: report embeds emoji; Windows locale (cp1252)
+        # would raise UnicodeEncodeError otherwise.
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(report)
         print(f"[*] Report saved to {output_path}")
     except OSError as e:
