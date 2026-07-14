@@ -5,11 +5,16 @@ Covers: TargetScope, TaskQueue, Finding (with ML metadata fields).
 
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import heapq
 
 from schema import Task
+
+
+def _utcnow() -> datetime:
+    """Timezone-aware UTC now (datetime.utcnow is deprecated in 3.12+)."""
+    return datetime.now(timezone.utc)
 
 
 # ── PRD 01: Orchestrator Models ──────────────────────────────────
@@ -71,4 +76,37 @@ class Finding(BaseModel):
     protocol: Optional[str] = None
     port: Optional[int] = None
     confidence: Optional[float] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow)
+
+
+# ── Finding classification (drives RAG metadata filters) ─────────
+
+_CREDENTIAL_MARKERS = (
+    "credential", "password", "passwd", ":", "hash", "ntlm", "secret",
+    "api key", "apikey", "token", "pwn3d", "valid login", "logged in",
+)
+_SERVICE_MARKERS = ("port", "open ", "/tcp", "/udp", "service", "banner", "protocol")
+
+
+def classify_finding_type(finding: "Finding") -> str:
+    """
+    Infer a coarse finding_type used by RAG metadata filters
+    (RetrievalEngine.get_credentials filters on 'credential').
+
+    Production agents rarely set finding_type explicitly, which used to make
+    credential retrieval — and thus cross-surface chaining — silently return
+    nothing. Storing a finding runs this so the label is always present.
+    """
+    if finding.finding_type:
+        return finding.finding_type
+    if finding.credential_material:
+        return "credential"
+    haystack = f"{finding.title} {finding.description} {finding.evidence}".lower()
+    if any(m in haystack for m in _CREDENTIAL_MARKERS):
+        # ':' alone is weak; require a credential-ish word alongside it
+        if any(w in haystack for w in ("cred", "password", "passwd", "hash",
+                                       "ntlm", "login", "secret", "token", "pwn3d")):
+            return "credential"
+    if any(m in haystack for m in _SERVICE_MARKERS):
+        return "service"
+    return "vulnerability"

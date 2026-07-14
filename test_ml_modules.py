@@ -336,12 +336,141 @@ class TestEvaluation:
         assert len(env["components"]) == 4
 
     def test_experiment_pipeline_execute(self, tmp_path):
-        """Run the full pipeline and verify output files are created."""
-        from src.ml.evaluation import ExperimentPipeline
+        """Run the full 12-run matrix and verify output files are created."""
+        from src.ml.evaluation import ExperimentPipeline, CONDITIONS, SCENARIOS
+        out = str(tmp_path / "output")
         pipe = ExperimentPipeline()
-        pipe.execute()
+        rows = pipe.execute(output_dir=out)
 
-        output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
-        assert os.path.exists(os.path.join(output_dir, "evaluation_metrics.csv")), "CSV not created"
-        assert os.path.exists(os.path.join(output_dir, "evaluation_findings.json")), "JSON not created"
-        assert os.path.exists(os.path.join(output_dir, "evaluation_summary.md")), "MD not created"
+        assert len(rows) == len(CONDITIONS) * len(SCENARIOS) == 12
+        assert os.path.exists(os.path.join(out, "evaluation_matrix.csv")), "CSV not created"
+        assert os.path.exists(os.path.join(out, "evaluation_summary.md")), "MD not created"
+        # One findings JSON per matrix cell — no clobbering.
+        for c in CONDITIONS:
+            for s in SCENARIOS:
+                assert os.path.exists(os.path.join(out, "findings", f"{c}_{s}.json")), \
+                    f"findings/{c}_{s}.json not created"
+
+
+# ================================================================
+# PRD 04b: RQS + MATRIX RANKING
+# ================================================================
+
+class TestRQSAndMatrix:
+    """Report Quality Score heuristic and the 12-run condition ranking."""
+
+    def test_rqs_empty_is_zero(self):
+        from src.ml.evaluation import compute_rqs
+        assert compute_rqs([]) == 0.0
+
+    def test_rqs_rewards_valid_cvss_and_chain(self):
+        from src.ml.evaluation import compute_rqs
+        strong = [
+            {"surface": "web", "evidence": "x", "finding_type": "vulnerability",
+             "severity": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"},
+            {"surface": "ad", "evidence": "y", "finding_type": "credential",
+             "credential_material": "a:b", "severity": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N"},
+        ]
+        weak = [
+            {"surface": "web", "evidence": "", "finding_type": "vulnerability", "severity": "High"},
+        ]
+        assert compute_rqs(strong) > compute_rqs(weak)
+        assert compute_rqs(strong) <= 50.0
+
+    def test_rqs_plaintext_severity_scores_low_on_cvss(self):
+        from src.ml.evaluation import compute_rqs
+        # Same finding, only the CVSS vector differs -> vector version scores higher.
+        vec = [{"surface": "web", "evidence": "x", "finding_type": "vulnerability",
+                "severity": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}]
+        plain = [{"surface": "web", "evidence": "x", "finding_type": "vulnerability",
+                  "severity": "High"}]
+        assert compute_rqs(vec) > compute_rqs(plain)
+
+    def test_matrix_has_12_runs_and_ranks_conditions(self):
+        from src.ml.evaluation import ExperimentPipeline
+        rows = ExperimentPipeline().run_matrix()
+        assert len(rows) == 12
+        # Tuned should not score below base, which should not score below baseline
+        # on average RQS — the whole point of the ARIA Tuned condition.
+        def avg_rqs(cond):
+            vals = [r["RQS"] for r in rows if r["condition"] == cond]
+            return sum(vals) / len(vals)
+        assert avg_rqs("aria_tuned") >= avg_rqs("aria_base") >= avg_rqs("baseline")
+
+
+# ================================================================
+# PRD 02b: RAG PRODUCTION PATH (finding_type auto-populated)
+# ================================================================
+
+class TestRAGProductionPath:
+    """Credential retrieval must work even when the agent never sets finding_type."""
+
+    def test_classify_finding_type_credential(self):
+        from src.ml.models import Finding, classify_finding_type
+        f = Finding(task_id="t", surface="ad", title="Valid login on DC",
+                    description="password accepted", severity="High",
+                    evidence="CORP\\admin:hunter2 Pwn3d!", remediation="rotate")
+        assert classify_finding_type(f) == "credential"
+
+    def test_classify_finding_type_service(self):
+        from src.ml.models import Finding, classify_finding_type
+        f = Finding(task_id="t", surface="network", title="Open port",
+                    description="445/tcp open", severity="Low",
+                    evidence="445/tcp open microsoft-ds", remediation="restrict")
+        assert classify_finding_type(f) == "service"
+
+    def test_get_credentials_without_manual_finding_type(self):
+        """Regression: store a credential finding with finding_type UNSET; RAG still finds it."""
+        chromadb = pytest.importorskip("chromadb")
+        from src.ml.models import Finding
+        from src.ml.memory import ChromaStore, RetrievalEngine
+        test_db = tempfile.mkdtemp(prefix="aria_test_rag_")
+        try:
+            store = ChromaStore(persist_dir=test_db)
+            f = Finding(task_id="t", surface="ad",
+                        title="Domain credential valid on 10.0.0.5",
+                        description="crackmapexec confirmed login",
+                        severity="CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+                        evidence="CORP\\admin:hunter2 (Pwn3d!)",
+                        remediation="rotate")  # NOTE: no finding_type set
+            store.store_finding(f)
+            creds = RetrievalEngine(store).get_credentials(k=5)
+            assert len(creds["ids"][0]) >= 1, "auto-classification failed; RAG returned nothing"
+        finally:
+            shutil.rmtree(test_db, ignore_errors=True)
+
+
+# ================================================================
+# PRD 05: FINE-TUNING
+# ================================================================
+
+class TestFineTuning:
+    """LoRA fine-tuning: dataset handling and dependency guarding (no GPU needed)."""
+
+    def test_deps_available_is_bool(self):
+        from src.ml.finetune import deps_available
+        assert isinstance(deps_available(), bool)
+
+    def test_load_and_format_sample_dataset(self):
+        from src.ml.finetune import load_dataset, build_texts
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "src", "ml", "data", "finetune_sample.jsonl")
+        records = load_dataset(path)
+        assert len(records) >= 5
+        texts = build_texts(records)
+        assert all("<|begin_of_text|>" in t and "assistant" in t for t in texts)
+
+    def test_load_dataset_rejects_missing_keys(self, tmp_path):
+        from src.ml.finetune import load_dataset
+        bad = tmp_path / "bad.jsonl"
+        bad.write_text('{"instruction": "only"}\n', encoding="utf-8")
+        with pytest.raises(ValueError):
+            load_dataset(str(bad))
+
+    def test_train_without_deps_raises_clearly(self):
+        """If torch/transformers/peft are absent, train() must fail loud, not silently."""
+        from src.ml import finetune
+        if finetune.deps_available():
+            pytest.skip("ML deps installed; guard path not exercised")
+        with pytest.raises(RuntimeError, match="torch"):
+            finetune.train(finetune.FineTuneConfig(), "irrelevant.jsonl")

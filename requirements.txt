@@ -24,3 +24,6 @@ torch>=2.0.0
 transformers>=4.30.0
 peft>=0.4.0
 sentence-transformers>=2.2.0
+# 4-bit LoRA training (FineTuneConfig.load_in_4bit); optional on CPU-only boxes
+bitsandbytes>=0.41.0
+accelerate>=0.21.0

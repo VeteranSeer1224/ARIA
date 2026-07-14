@@ -65,7 +65,9 @@ class WebAgent(BaseAgent):
                     severity="High",
                     evidence="Error: syntax near ''",
                     remediation="Use parameterized queries.",
-                    source_tool="SQLMap"
+                    source_tool="SQLMap",
+                    asset=task.target,
+                    finding_type="vulnerability",
                 )
                 findings.append(self.publish(finding))
         except Exception as e:
@@ -103,7 +105,11 @@ class NetworkAgent(BaseAgent):
                     severity="Low",
                     evidence="Port 445/tcp open",
                     remediation="Restrict access to trusted IP ranges.",
-                    source_tool="Nmap"
+                    source_tool="Nmap",
+                    asset=task.target,
+                    protocol="tcp",
+                    port=445,
+                    finding_type="service",
                 )
                 findings.append(self.publish(finding))
         except Exception as e:

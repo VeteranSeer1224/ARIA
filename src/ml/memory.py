@@ -9,7 +9,16 @@ from typing import List
 
 import chromadb
 
-from .models import Finding
+from .models import Finding, classify_finding_type
+
+# Shared persistent store — must match db.py so the ML memory and the rest of
+# the pipeline read/write the SAME ChromaDB (both use collection 'aria_findings').
+# db.py resolves this to <repo_root>/chroma_store; memory.py lives in src/ml/,
+# so the repo root is two directories up.
+_SHARED_DB_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "chroma_store",
+)
 
 
 # ── Embedding Model ──────────────────────────────────────────────
@@ -35,9 +44,17 @@ class EmbeddingModel:
             for i in range(12):
                 hi = hashlib.sha256(f"{text}_{i}".encode()).digest()
                 dims.extend([float(b) / 255.0 for b in hi])
-            return dims[:self.EMBEDDING_DIM]
+            vec = dims[:self.EMBEDDING_DIM]
         else:
-            return self.model.encode([text])[0].tolist()
+            vec = self.model.encode([text])[0].tolist()
+        # Guard: every vector in a collection must share one dimension, else
+        # Chroma raises at query time. Catches a model swap that changes width.
+        if len(vec) != self.EMBEDDING_DIM:
+            raise ValueError(
+                f"Embedding width {len(vec)} != expected {self.EMBEDDING_DIM}. "
+                "Update EMBEDDING_DIM to match the active model and re-index."
+            )
+        return vec
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         return [self.embed(t) for t in texts]
@@ -47,8 +64,10 @@ class EmbeddingModel:
 
 class ChromaStore:
     """Persistent ChromaDB backend with store, retrieve, delete, update."""
-    def __init__(self, persist_dir="./chroma_db"):
-        self.client = chromadb.PersistentClient(path=persist_dir)
+    def __init__(self, persist_dir=None):
+        # Default to the shared store so ML memory and the pipeline see the
+        # same data. Callers can still override (e.g. tests use a temp dir).
+        self.client = chromadb.PersistentClient(path=persist_dir or _SHARED_DB_PATH)
         self.collection = self.client.get_or_create_collection(
             name="aria_findings",
             metadata={"hnsw:space": "cosine"}
@@ -86,6 +105,12 @@ class ChromaStore:
 
     def store_finding(self, finding: Finding):
         """Store a finding with content-level duplicate suppression via upsert."""
+        # Ensure finding_type is always set so RAG metadata filters
+        # (get_credentials/host_relationships) work regardless of whether the
+        # producing agent bothered to set it.
+        if not finding.finding_type:
+            finding.finding_type = classify_finding_type(finding)
+
         doc = self._prepare_document(finding)
         emb = self.embedder.embed(doc)
         meta = self._prepare_metadata(finding)
@@ -106,9 +131,14 @@ class ChromaStore:
     def retrieve(self, query: str, k: int = 5, where: dict = None) -> list:
         """Top-k semantic search with optional metadata filtering."""
         emb = self.embedder.embed(query)
+        # Clamp to collection size — some Chroma versions raise when
+        # n_results exceeds the number of stored items.
+        count = self.collection.count()
+        if count == 0:
+            return {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
         kwargs = {
             "query_embeddings": [emb],
-            "n_results": k,
+            "n_results": min(k, count),
         }
         if where:
             kwargs["where"] = where
@@ -121,13 +151,19 @@ class ChromaStore:
         self.collection.delete(ids=[finding_id])
 
     def update(self, finding: Finding):
-        """Update an existing finding."""
+        """
+        Update an existing finding. Keyed by content id (title+evidence), the
+        same scheme store_finding uses — keying on finding.id (uuid4) would
+        never match a stored record and would orphan the write.
+        """
+        if not finding.finding_type:
+            finding.finding_type = classify_finding_type(finding)
         doc = self._prepare_document(finding)
         emb = self.embedder.embed(doc)
         meta = self._prepare_metadata(finding)
 
         self.collection.update(
-            ids=[finding.id],
+            ids=[self._content_id(finding)],
             documents=[doc],
             embeddings=[emb],
             metadatas=[meta]
