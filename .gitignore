@@ -18,3 +18,4 @@ __pycache__/
 graphify-out/
 .env
 *.log
+CLAUDE.md
