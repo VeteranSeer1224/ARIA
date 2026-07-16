@@ -1,5 +1,13 @@
 """
-src/ml — All ML subsystems for ARIA.
+src/ml — ML research sandbox for ARIA.
+
+IMPORTANT — ISOLATED SANDBOX
+  This package owns its own Finding schema (src/ml/models.Finding, 16 fields)
+  which is intentionally richer than the root schema.Finding (8 fields).
+  Do NOT mix objects from the two schemas without an explicit conversion:
+  pydantic extra='ignore' will silently drop fields.
+
+  See ARCHITECTURE.md for the full dual-pipeline discussion and migration options.
 
 PRD 01: Orchestrator (orchestrator.py)
 PRD 02: Shared Memory (memory.py)
@@ -30,7 +38,7 @@ from .agents import BaseAgent, WebAgent, NetworkAgent, ReportingAgent
 # Evaluation
 from .evaluation import (
     MetricsCalculator, Scorer, BenchmarkEnvironment, ExperimentPipeline,
-    SimulatedRunner, compute_rqs, CONDITIONS, SCENARIOS,
+    SimulatedRunner, OrchestratorRunner, compute_rqs, CONDITIONS, SCENARIOS,
 )
 
 # Fine-tuning (heavy deps imported lazily inside finetune functions)
@@ -47,7 +55,7 @@ __all__ = [
     "BaseAgent", "WebAgent", "NetworkAgent", "ReportingAgent",
     # Evaluation
     "MetricsCalculator", "Scorer", "BenchmarkEnvironment", "ExperimentPipeline",
-    "SimulatedRunner", "compute_rqs", "CONDITIONS", "SCENARIOS",
+    "SimulatedRunner", "OrchestratorRunner", "compute_rqs", "CONDITIONS", "SCENARIOS",
     # Fine-tuning
     "FineTuneConfig", "TunedModel", "train", "load_dataset", "deps_available",
 ]

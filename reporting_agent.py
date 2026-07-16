@@ -4,7 +4,7 @@ import argparse
 from datetime import datetime
 from collections import defaultdict
 from cvss import CVSS3
-from db import collection
+from db import _get_collection
 
 
 # ── Severity helpers ────────────────────────────────────────────────
@@ -37,39 +37,23 @@ _SEVERITY_EMOJI = {
 
 def get_severity_label(meta):
     """
-    Computes the real CVSS 3.1 base score from the severity vector string
-    using the official formula (via the cvss library). If the severity field
-    is a plain-text label (e.g. 'Medium', 'Critical') rather than a CVSS
-    vector, it is normalised directly. Falls back to UNKNOWN if missing or
-    unrecognised.
+    Computes the CVSS 3.1 base score and severity label from the severity
+    field in a ChromaDB metadata dict. Accepts both a proper CVSS v3.1
+    vector string and a plain-text label (e.g. 'High', 'Medium').
+    Falls back to UNKNOWN if missing or unrecognised.
     """
     severity_str = meta.get("severity", "")
-    # Try parsing as a proper CVSS vector first
+
+    # ── Path 1: proper CVSS vector ──────────────────────────────
     try:
         c = CVSS3(severity_str)
         score = float(c.base_score)
         label = c.severities()[0].upper()
+        if label == "NONE":
+            label = "INFORMATIONAL"
         return label, score
     except Exception:
         pass
-    # Fall back to plain-text label (e.g. stored by parsers as 'Medium')
-    normalised = severity_str.strip().lower()
-    if normalised in _PLAIN_TEXT_LABELS:
-        return normalised.upper(), None
-    return "UNKNOWN", None
-
-    # ── Path 1: proper CVSS vector ──────────────────────────────
-    if severity_str.upper().startswith("CVSS:"):
-        try:
-            c = CVSS3(severity_str)
-            score = float(c.base_score)
-            label = c.severities()[0].upper()
-            # Map "NONE" from the CVSS library to INFORMATIONAL
-            if label == "NONE":
-                label = "INFORMATIONAL"
-            return label, score
-        except Exception:
-            pass  # fall through to keyword matching
 
     # ── Path 2: keyword / plain-text fallback ───────────────────
     key = severity_str.lower().strip()
@@ -123,7 +107,7 @@ def seed_dummy_data():
         },
     ]
     for f in dummy:
-        collection.upsert(
+        _get_collection().upsert(
             documents=[f["description"]],
             metadatas=[{
                 "id": f["id"],
@@ -142,7 +126,7 @@ def seed_dummy_data():
 # ── ChromaDB reader ────────────────────────────────────────────────
 
 def read_real_findings():
-    results = collection.get(include=["documents", "metadatas"])
+    results = _get_collection().get(include=["documents", "metadatas"])
     ids = results.get("ids", [])
     metadatas = results.get("metadatas", [])
     documents = results.get("documents", [])

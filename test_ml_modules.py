@@ -9,9 +9,6 @@ import tempfile
 
 import pytest
 
-import sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 
 # ================================================================
 # PRD 01: ORCHESTRATOR
@@ -171,7 +168,7 @@ class TestSharedMemory:
             tags=["sqli"], confidence=0.95
         )
         chroma_store.store_finding(f1)
-        was_dup = chroma_store.store_finding(f1)
+        was_dup = chroma_store.store_finding(f1, check_duplicate=True)
         assert was_dup is True, f"Expected True for duplicate, got {was_dup}"
         results = chroma_store.retrieve("SQL injection", k=10)
         assert len(results["ids"][0]) == 1, "Duplicate was inserted instead of upserted"

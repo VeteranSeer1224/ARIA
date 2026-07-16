@@ -62,11 +62,11 @@ def run_pipeline_demo():
             print(f"[+] Passing {len(found_creds)} credential hint(s) to Network Agent...")
         try:
             if t.type == "network":
-                finding_ids = mock_network_agent(t, found_creds=found_creds)
+                findings = mock_network_agent(t, found_creds=found_creds)
             elif t.type == "ad":
-                finding_ids = mock_ad_agent(t)
+                findings = mock_ad_agent(t)
             t.status = "completed"
-            print(f"[+] Agent finished. Stored {len(finding_ids)} findings in ChromaDB.")
+            print(f"[+] Agent finished. Stored {len(findings)} findings in ChromaDB.")
         except Exception as e:
             t.status = "failed"
             print(f"[!] Agent failed: {e}")
