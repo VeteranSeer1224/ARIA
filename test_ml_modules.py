@@ -200,6 +200,25 @@ class TestSharedMemory:
         f2.description = "Port 445 open with signing disabled"
         chroma_store.update(f2)
 
+        # The update changed the title, which feeds the content key. The record
+        # must be relocated, not duplicated or orphaned: exactly one record, and
+        # its document must reflect the new content.
+        assert chroma_store.collection.count() == 1, "update must not duplicate or orphan the record"
+        docs = chroma_store.retrieve("SMB", k=10)["documents"][0]
+        assert len(docs) == 1
+        assert "Updated" in docs[0] and "signing disabled" in docs[0], "update did not persist new content"
+
+    def test_delete_by_uuid(self, chroma_store):
+        from src.ml.models import Finding
+        f = Finding(
+            task_id="t2", surface="network", title="Delete by uuid",
+            description="Port 139 open", severity="Low",
+            evidence="139/tcp open", remediation="Restrict access",
+        )
+        chroma_store.store_finding(f)
+        chroma_store.delete(f.id)  # stable uuid, not the content id
+        assert chroma_store.collection.count() == 0, "delete by uuid must remove the record"
+
     def test_retrieval_engine_credentials(self, chroma_store):
         from src.ml.models import Finding
         from src.ml.memory import RetrievalEngine

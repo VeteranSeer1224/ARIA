@@ -160,27 +160,30 @@ class ChromaStore:
         return results
 
     def delete(self, finding_id: str):
-        """Delete a finding by ID."""
-        self.collection.delete(ids=[finding_id])
+        """Delete a finding by its content id or by a finding's stable uuid.
+
+        Records are keyed by content id, but callers often hold only the
+        Finding.id (uuid), which is stored in metadata — match on both so a
+        delete by uuid is not a silent no-op.
+        """
+        ids = {finding_id}
+        by_uuid = self.collection.get(where={"id": finding_id}, include=[])
+        ids.update(by_uuid["ids"])
+        self.collection.delete(ids=list(ids))
 
     def update(self, finding: Finding):
         """
-        Update an existing finding. Keyed by content id (title+evidence), the
-        same scheme store_finding uses — keying on finding.id (uuid4) would
-        never match a stored record and would orphan the write.
-        """
-        if not finding.finding_type:
-            finding.finding_type = classify_finding_type(finding)
-        doc = self._prepare_document(finding)
-        emb = self.embedder.embed(doc)
-        meta = self._prepare_metadata(finding)
+        Update an existing finding.
 
-        self.collection.update(
-            ids=[self._content_id(finding)],
-            documents=[doc],
-            embeddings=[emb],
-            metadatas=[meta]
-        )
+        The content id is derived from title+evidence, so mutating either would
+        change the key and leave the original record orphaned under the old key.
+        Locate the prior record by the stable finding.id (uuid, in metadata),
+        remove it, then re-store so the update lands under the current content id.
+        """
+        existing = self.collection.get(where={"id": finding.id}, include=[])
+        if existing["ids"]:
+            self.collection.delete(ids=existing["ids"])
+        self.store_finding(finding)
 
 
 # ── Retrieval Engine ─────────────────────────────────────────────

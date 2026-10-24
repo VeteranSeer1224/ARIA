@@ -73,8 +73,28 @@ def query_findings(query_text: str, n_results: int = 5) -> Dict[str, Any]:
     return results
 
 
+# Indicators that a finding's text actually carries a credential, used to keep
+# semantic-search matches (which rank anything loosely related) from being
+# handed off as credentials when they are not.
+_CREDENTIAL_HINTS = (
+    "password", "passwd", "pwd", "hash", "ntlm", "credential", "secret",
+    "token", "api key", "apikey", "login", "pwn3d", "valid login", "logged in",
+)
+
+
+def _looks_like_credential(text: str) -> bool:
+    lowered = text.lower()
+    return any(hint in lowered for hint in _CREDENTIAL_HINTS)
+
+
 def query_credentials(n_results: int = 5) -> List[str]:
-    """Returns evidence strings from findings most likely to contain credentials or payloads."""
+    """Returns evidence strings from findings that actually look like credentials.
+
+    Semantic search alone ranks loosely related findings highly, so a match is
+    kept only if its title or evidence contains a credential indicator. This
+    prevents non-credentials (e.g. a bare injection payload) from being handed
+    off to the network stage as if they were credentials.
+    """
     col = _get_collection()
     count = col.count()
     if count == 0:
@@ -87,7 +107,7 @@ def query_credentials(n_results: int = 5) -> List[str]:
     if results.get("metadatas") and results["metadatas"][0]:
         for meta in results["metadatas"][0]:
             evidence = meta.get("evidence", "")
-            if evidence:
+            if evidence and _looks_like_credential(f"{meta.get('title', '')} {evidence}"):
                 evidence_list.append(evidence)
     return evidence_list
 
