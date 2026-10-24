@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y \
 # --------------------------------------------------
 # Install Python dependencies
 # --------------------------------------------------
-RUN wget https://github.com/ffuf/ffuf/releases/latest/download/ffuf_2.1.0_linux_amd64.tar.gz \
+RUN wget https://github.com/ffuf/ffuf/releases/download/v2.1.0/ffuf_2.1.0_linux_amd64.tar.gz \
     && tar -xzf ffuf_2.1.0_linux_amd64.tar.gz \
     && mv ffuf /usr/local/bin/ \
     && chmod +x /usr/local/bin/ffuf \

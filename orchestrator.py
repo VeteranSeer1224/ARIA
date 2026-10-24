@@ -150,9 +150,12 @@ class AriaOrchestrator:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="ARIA Orchestrator")
-    parser.add_argument("--scope", required=True, help="Target scope (e.g., '192.168.1.0/24 internal network and http://dvwa.local')")
+    parser.add_argument("--scope", default=os.getenv("TARGET_URL"), help="Target scope (e.g., '192.168.1.0/24 internal network and http://dvwa.local'). Defaults to the TARGET_URL env var.")
     parser.add_argument("--api-key", required=False, help="DeepSeek API Key. Defaults to DEEPSEEK_API_KEY env var.")
     args = parser.parse_args()
+
+    if not args.scope:
+        parser.error("no scope provided: pass --scope or set the TARGET_URL environment variable")
 
     orchestrator = AriaOrchestrator()
     planned_tasks = orchestrator.plan_attack(args.scope)

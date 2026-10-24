@@ -3,17 +3,56 @@ PRD 01 — Orchestrator: planning, scheduling, routing, and state management.
 The Orchestrator reasons, delegates, and coordinates. It never executes offensive tools.
 """
 
+import ipaddress
 import json
 import os
 import traceback
 from datetime import datetime
 from typing import List
+from urllib.parse import urlparse
 
 from openai import OpenAI
 
 from schema import Task
 
 from .models import Finding, TargetScope, TaskQueue
+
+
+# ── Scope enforcement ────────────────────────────────────────────
+
+def _host_of(value: str) -> str:
+    """Extract a lowercase hostname from a URL, host:port, or bare host."""
+    value = value.strip()
+    if "://" in value:
+        host = urlparse(value).hostname or ""
+    else:
+        host = value.split("/")[0]
+        if host.count(":") == 1:  # host:port (a bare IPv6 has several colons)
+            host = host.split(":")[0]
+    return host.lower()
+
+
+def _host_matches_domain(host: str, d: str) -> bool:
+    return bool(d) and (host == d or host.endswith("." + d))
+
+
+def _ip_in_range(host: str, r: str) -> bool:
+    try:
+        return ipaddress.ip_address(host) in ipaddress.ip_network(r, strict=False)
+    except ValueError:
+        return False
+
+
+def in_scope(target: str, scope: TargetScope) -> bool:
+    """True only if the target is inside the authorized scope and not excluded."""
+    host = _host_of(target)
+    if not host:
+        return False
+    if any(_host_matches_domain(host, _host_of(e)) or _ip_in_range(host, e)
+           for e in scope.exclusions):
+        return False
+    return (any(_host_matches_domain(host, _host_of(d)) for d in scope.domains)
+            or any(_ip_in_range(host, r) for r in scope.ip_ranges))
 
 
 # ── State ────────────────────────────────────────────────────────
@@ -51,6 +90,16 @@ class Planner:
         )
         self.model = "deepseek-chat"
 
+    def _safe_enqueue(self, task: Task, scope: TargetScope, state: OrchestratorState):
+        """Enqueue only if the task's target is authorized and not already run."""
+        if not in_scope(task.target, scope):
+            print(f"[Planner] Skipping out-of-scope/excluded target: {task.target}")
+            return
+        if state.has_task_run(task):
+            return
+        state.queue.enqueue(task)
+        state.mark_task_run(task)
+
     def create_plan(self, scope: TargetScope, state: OrchestratorState):
         """Build attack plan and decompose into tasks."""
         print(f"[Planner] Creating plan for scope with domains: {scope.domains}, IPs: {scope.ip_ranges}")
@@ -79,9 +128,7 @@ class Planner:
 
             for rt in payload.get("tasks", []):
                 task = Task(type=rt["type"], target=rt["target"])
-                if not state.has_task_run(task):
-                    state.queue.enqueue(task)
-                    state.mark_task_run(task)
+                self._safe_enqueue(task, scope, state)
 
         except Exception as e:
             print(f"[Planner] {type(e).__name__} during LLM planning: {e}. "
@@ -90,18 +137,18 @@ class Planner:
             for domain in scope.domains:
                 if domain not in scope.exclusions:
                     task = Task(type="web", target=domain)
-                    if not state.has_task_run(task):
-                        state.queue.enqueue(task)
-                        state.mark_task_run(task)
+                    self._safe_enqueue(task, scope, state)
             for ip in scope.ip_ranges:
                 if ip not in scope.exclusions:
                     task = Task(type="network", target=ip)
-                    if not state.has_task_run(task):
-                        state.queue.enqueue(task)
-                        state.mark_task_run(task)
+                    self._safe_enqueue(task, scope, state)
 
-    def update_plan(self, findings: list[Finding], state: OrchestratorState):
-        """Trigger replanning based on new findings to prevent loops and duplicate work."""
+    def update_plan(self, findings: list[Finding], state: OrchestratorState, scope: TargetScope):
+        """Trigger replanning based on new findings to prevent loops and duplicate work.
+
+        scope is required: replanning must validate against the current engagement's
+        scope, never a value cached on this (potentially reused) Planner instance.
+        """
         print(f"[Planner] Updating plan with {len(findings)} new findings.")
         for finding in findings:
             if "port 80" in finding.description.lower() or "web" in finding.description.lower():
@@ -113,8 +160,7 @@ class Planner:
                 new_task = Task(type="web", target=target)
                 if not state.has_task_run(new_task):
                     print(f"[Planner] Discovered new web task from finding: {new_task.target}")
-                    state.queue.enqueue(new_task)
-                    state.mark_task_run(new_task)
+                    self._safe_enqueue(new_task, scope, state)
 
 
 # ── Scheduler ────────────────────────────────────────────────────
