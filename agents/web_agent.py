@@ -26,6 +26,7 @@ def run_web_agent(task: Task):
     print("=" * 60)
 
     all_findings = []
+    errors = []
 
     # --------------------------------------------------
     # FFUF
@@ -51,6 +52,7 @@ def run_web_agent(task: Task):
 
     except Exception as e:
         print(f"[Web Agent] FFUF Error: {e}")
+        errors.append(f"FFUF: {e}")
 
     # --------------------------------------------------
     # NIKTO
@@ -76,6 +78,7 @@ def run_web_agent(task: Task):
 
     except Exception as e:
         print(f"[Web Agent] Nikto Error: {e}")
+        errors.append(f"Nikto: {e}")
 
     # --------------------------------------------------
     # SQLMAP
@@ -101,6 +104,7 @@ def run_web_agent(task: Task):
 
     except Exception as e:
         print(f"[Web Agent] SQLMap Error: {e}")
+        errors.append(f"SQLMap: {e}")
 
     print("\n" + "=" * 60)
     print(
@@ -108,5 +112,13 @@ def run_web_agent(task: Task):
         f"Stored {len(all_findings)} findings."
     )
     print("=" * 60)
+
+    # Surface tool failures so the Orchestrator does not record a task that
+    # could not run its tools as a clean completion. Findings from tools that
+    # did succeed are already persisted to the shared store above.
+    if errors:
+        raise RuntimeError(
+            f"{len(errors)} web tool(s) failed: " + "; ".join(errors)
+        )
 
     return all_findings

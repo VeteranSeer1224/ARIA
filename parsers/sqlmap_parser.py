@@ -16,10 +16,11 @@ def _extract_evidence(output: str) -> str:
     return evidence or output[:_MAX_EVIDENCE]
 
 
+# Match only phrases sqlmap prints on a positive detection. A bare "injectable"
+# substring matches negative output too ("does not seem to be injectable"), so
+# it is deliberately excluded.
 _INJECTION_MARKERS = (
-    "injectable",
     "is vulnerable",
-    "the following injection point",
     "sqlmap identified the following injection point",
 )
 
