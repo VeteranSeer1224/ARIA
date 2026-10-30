@@ -39,9 +39,12 @@ def run_baseline_pentest(target_scope: str):
         print("[Baseline] Assessment Complete. Outputting raw report:")
         print("="*60 + "\n")
         print(report)
-        
+
+        return report
+
     except Exception as e:
         print(f"[Baseline] Error during execution: {e}")
+        return None
 
 if __name__ == "__main__":
     # Using the exact same test scope as the Orchestrator for a 1:1 comparison

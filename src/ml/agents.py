@@ -5,7 +5,6 @@ execute tool wrappers, and return standardized findings.
 
 import abc
 import logging
-import time
 from typing import List, Any
 from datetime import datetime
 import traceback
@@ -44,36 +43,36 @@ class BaseAgent(abc.ABC):
 
 # ── Web Agent ────────────────────────────────────────────────────
 
+def _to_ml_finding(finding, task: Task) -> Finding:
+    """Map a core schema.Finding (from the P2 tool pipeline) onto the ML Finding."""
+    return Finding(
+        task_id=finding.task_id,
+        surface=finding.surface,
+        title=finding.title,
+        description=finding.description,
+        severity=finding.severity,
+        evidence=finding.evidence,
+        remediation=finding.remediation,
+        asset=task.target,
+    )
+
+
 class WebAgent(BaseAgent):
     """Handles web recon and exploitation (FFUF, Nikto, SQLMap)."""
     def __init__(self):
         super().__init__("WebAgent")
 
     def run(self, task: Task) -> list[Finding]:
+        """Run the real web tool pipeline and return findings parsed from it.
+
+        Delegates to the P2 web agent so results come from actual tool output
+        rather than a fabricated placeholder. Tool failures propagate (the P2
+        agent raises) so a failed run is never reported as an empty success.
+        """
         self.logger.info(f"Running WebAgent on {task.target}")
-        findings = []
-        try:
-            time.sleep(1)
-            raw_result = {"status": "success", "vuln": "SQL Injection"}
-
-            if self.validate(raw_result):
-                finding = Finding(
-                    task_id=task.id,
-                    surface="web",
-                    title="SQL Injection found",
-                    description="SQL injection payload triggered a database error.",
-                    severity="High",
-                    evidence="Error: syntax near ''",
-                    remediation="Use parameterized queries.",
-                    source_tool="SQLMap",
-                    asset=task.target,
-                    finding_type="vulnerability",
-                )
-                findings.append(self.publish(finding))
-        except Exception as e:
-            self.logger.error(f"Execution failed: {e}", exc_info=True)
-
-        return findings
+        from agents.web_agent import run_web_agent as run_web_tools
+        raw_findings = run_web_tools(task)
+        return [self.publish(_to_ml_finding(f, task)) for f in raw_findings]
 
 
 def run_web_agent(task: Task) -> list[Finding]:
@@ -90,32 +89,11 @@ class NetworkAgent(BaseAgent):
         super().__init__("NetworkAgent")
 
     def run(self, task: Task) -> list[Finding]:
-        self.logger.info(f"Running NetworkAgent on {task.target}")
-        findings = []
-        try:
-            time.sleep(1)
-            raw_result = {"status": "success", "open_ports": [445, 3389]}
-
-            if self.validate(raw_result):
-                finding = Finding(
-                    task_id=task.id,
-                    surface=task.type if task.type in ["network", "ad"] else "network",
-                    title="Open SMB Port",
-                    description="Port 445 is open and accessible.",
-                    severity="Low",
-                    evidence="Port 445/tcp open",
-                    remediation="Restrict access to trusted IP ranges.",
-                    source_tool="Nmap",
-                    asset=task.target,
-                    protocol="tcp",
-                    port=445,
-                    finding_type="service",
-                )
-                findings.append(self.publish(finding))
-        except Exception as e:
-            self.logger.error(f"Execution failed: {e}", exc_info=True)
-
-        return findings
+        raise NotImplementedError(
+            "Real network/AD execution is not yet integrated (P3). This agent "
+            "must not fabricate findings; wire the Nmap/CrackMapExec/BloodHound "
+            "tooling here before using it in a benchmark run."
+        )
 
 
 def run_network_agent(task: Task) -> list[Finding]:
@@ -132,7 +110,10 @@ class ReportingAgent(BaseAgent):
         super().__init__("ReportingAgent")
 
     def run(self, task: Task) -> list[Finding]:
-        pass
+        raise NotImplementedError(
+            "ReportingAgent builds a report from collected findings via "
+            "generate_report(findings); it has no per-task execution step."
+        )
 
     def deduplicate(self, findings: List[Finding]) -> List[Finding]:
         """Remove duplicate findings by title+evidence signature."""

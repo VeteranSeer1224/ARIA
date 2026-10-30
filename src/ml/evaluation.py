@@ -35,16 +35,25 @@ class MetricsCalculator:
         return (completed / total) if total > 0 else 0.0
 
     @staticmethod
-    def calculate_ttc(start_time: float, compromise_time: float) -> float:
+    def calculate_ttc(start_time: float, compromise_time):
+        """Seconds from scope input to first flag/credential capture.
+
+        compromise_time is None when the run never achieved compromise; TTC is
+        then undefined (returned as None), not the time of the last completed task.
+        """
+        if compromise_time is None:
+            return None
         return compromise_time - start_time
 
     @staticmethod
-    def calculate_asc(discovered_nodes: int, total_nodes: int) -> float:
-        return (discovered_nodes / total_nodes) if total_nodes > 0 else 0.0
+    def calculate_asc(identified_vulnerabilities: int, total_vulnerabilities: int) -> float:
+        """Planted vulnerabilities identified / total planted vulnerabilities."""
+        return (identified_vulnerabilities / total_vulnerabilities) if total_vulnerabilities > 0 else 0.0
 
     @staticmethod
-    def calculate_far(false_actions: int, total_actions: int) -> float:
-        return (false_actions / total_actions) if total_actions > 0 else 0.0
+    def calculate_far(unproductive_invocations: int, total_invocations: int) -> float:
+        """Tool invocations yielding no useful finding / total tool invocations."""
+        return (unproductive_invocations / total_invocations) if total_invocations > 0 else 0.0
 
 
 # ── RQS (Report Quality Score, 0-50) ─────────────────────────────
@@ -109,25 +118,31 @@ def compute_rqs(findings: list) -> float:
 # ── Scorer ───────────────────────────────────────────────────────
 
 class Scorer:
-    """Scores one execution run against the ground-truth oracle."""
-    def __init__(self, ground_truth: dict):
-        self.ground_truth = ground_truth
+    """Scores one execution run against the per-scenario ground-truth oracle.
 
-    def score_run(self, execution_data: dict, rqs: float = None) -> dict:
+    TCR and ASC denominators come from the oracle (objectives defined and
+    vulnerabilities planted at scope time), not from the live execution, so a
+    task that fails during replanning cannot shrink the denominator and inflate
+    the score.
+    """
+    def __init__(self, benchmark: "BenchmarkEnvironment"):
+        self.benchmark = benchmark
+
+    def score_run(self, execution_data: dict, scenario: str, rqs: float = None) -> dict:
+        oracle = self.benchmark.get_oracle(scenario)
         tcr = MetricsCalculator.calculate_tcr(
-            execution_data["tasks_completed"], execution_data["total_tasks"])
+            execution_data["objectives_completed"], oracle["objectives"])
         ttc = MetricsCalculator.calculate_ttc(
             execution_data["start_time"], execution_data["compromise_time"])
         asc = MetricsCalculator.calculate_asc(
-            execution_data["discovered_nodes"], self.ground_truth["total_nodes"])
+            execution_data["vulnerabilities_identified"], oracle["planted_vulnerabilities"])
         far = MetricsCalculator.calculate_far(
-            execution_data["false_actions"], execution_data["total_actions"])
+            execution_data["unproductive_invocations"], execution_data["total_invocations"])
 
         if rqs is None:
-            findings = execution_data.get("findings", [])
             rqs = execution_data.get("rqs")
             if rqs is None:
-                rqs = compute_rqs(findings)
+                rqs = compute_rqs(execution_data.get("findings", []))
 
         return {"TCR": tcr, "TTC": ttc, "ASC": asc, "FAR": far, "RQS": rqs}
 
@@ -135,7 +150,20 @@ class Scorer:
 # ── Benchmark environment / oracle ───────────────────────────────
 
 class BenchmarkEnvironment:
-    """Ground-truth lab: Windows Server AD + workstations + vulnerable web app."""
+    """Ground-truth lab: Windows Server AD + workstations + vulnerable web app.
+
+    Ground truth is tracked per scenario. `planted_vulnerabilities` and
+    `objectives` are the spec denominators for ASC and TCR; they are fixed at
+    scope-definition time so replanning cannot change them.
+    """
+
+    SCENARIO_ORACLE = {
+        "web":     {"planted_vulnerabilities": 2, "objectives": 2, "total_nodes": 1},
+        "network": {"planted_vulnerabilities": 1, "objectives": 1, "total_nodes": 1},
+        "ad":      {"planted_vulnerabilities": 1, "objectives": 1, "total_nodes": 1},
+        "e2e":     {"planted_vulnerabilities": 2, "objectives": 2, "total_nodes": 2},
+    }
+
     def __init__(self):
         self.environment = {
             "components": [
@@ -145,14 +173,20 @@ class BenchmarkEnvironment:
                 "Vulnerable Web Application",
             ]
         }
-        self.ground_truth = {"total_nodes": 4, "vulnerabilities": 5}
 
     def load(self):
         print("[Benchmark] Loading benchmark environment...")
         return self.environment
 
-    def get_oracle(self):
-        return self.ground_truth
+    def get_oracle(self, scenario: str = None) -> dict:
+        """Per-scenario oracle, or an aggregate across all scenarios when scenario is None."""
+        if scenario is None:
+            return {
+                "total_nodes": sum(o["total_nodes"] for o in self.SCENARIO_ORACLE.values()),
+                "planted_vulnerabilities": sum(o["planted_vulnerabilities"] for o in self.SCENARIO_ORACLE.values()),
+                "objectives": sum(o["objectives"] for o in self.SCENARIO_ORACLE.values()),
+            }
+        return self.SCENARIO_ORACLE[scenario]
 
 
 # ── Runners ──────────────────────────────────────────────────────
@@ -226,16 +260,20 @@ class SimulatedRunner:
                 g.pop("credential_material", None)
             findings.append(g)
 
-        total_tasks = len(ideal)
-        discovered = keep if scenario == "e2e" else min(keep + 1, 4)
+        # Compromise = a flag/credential was actually captured. Single-surface
+        # scenarios compromise on identifying their vuln; e2e requires the
+        # credential chain, which the baseline drops -> no compromise -> TTC None.
+        achieved = scenario != "e2e" or any(
+            f.get("finding_type") == "credential" or f.get("credential_material")
+            for f in findings
+        )
         return {
-            "tasks_completed": keep,
-            "total_tasks": total_tasks,
+            "objectives_completed": keep,
+            "vulnerabilities_identified": keep,
             "start_time": 0.0,
-            "compromise_time": ttc,
-            "discovered_nodes": discovered,
-            "false_actions": false_actions,
-            "total_actions": keep + false_actions,
+            "compromise_time": ttc if achieved else None,
+            "unproductive_invocations": false_actions,
+            "total_invocations": keep + false_actions,
             "findings": findings,
         }
 
@@ -350,6 +388,45 @@ class OrchestratorRunner:
         }
 
 
+class ConditionRunner:
+    """Routes each condition to the architecture evaluation.md prescribes.
+
+    The baseline condition MUST run the monolithic single-agent assessment
+    (one prompt, no delegation — baseline.run_baseline_pentest), while the ARIA
+    conditions run the hierarchical Planner/Scheduler/Router pipeline. Running
+    both through the same pipeline and only swapping the planner model would
+    make the comparison meaningless, so the two architectures are dispatched
+    explicitly and a missing runner is an error rather than a silent fallback
+    to the wrong architecture.
+
+    Both live runners need an LLM, so they are injected; SimulatedRunner remains
+    the offline stand-in for the full matrix (pass it as ExperimentPipeline's
+    runner directly instead of using this dispatcher).
+    """
+    def __init__(self, monolithic_runner=None, hierarchical_runner=None):
+        self.monolithic_runner = monolithic_runner
+        self.hierarchical_runner = hierarchical_runner
+
+    def __call__(self, condition: str, scenario: str) -> dict:
+        if condition == "baseline":
+            if self.monolithic_runner is None:
+                raise NotImplementedError(
+                    "baseline condition requires the monolithic runner "
+                    "(baseline.run_baseline_pentest); it must not be routed through "
+                    "the ARIA pipeline. Pass monolithic_runner=..., or use "
+                    "SimulatedRunner for an offline matrix."
+                )
+            return self.monolithic_runner(condition, scenario)
+        if self.hierarchical_runner is None:
+            raise NotImplementedError(
+                "ARIA conditions require the hierarchical orchestrator runner. "
+                "Pass hierarchical_runner=..., or use SimulatedRunner for an "
+                "offline matrix."
+            )
+        return self.hierarchical_runner(condition, scenario)
+
+
+# ── Experiment pipeline ──────────────────────────────────────────
 
 class ExperimentPipeline:
     """Full experiment: load benchmark -> run 12-cell matrix -> score -> export."""
@@ -359,13 +436,12 @@ class ExperimentPipeline:
 
     def run_matrix(self) -> list:
         """Execute all CONDITIONS x SCENARIOS runs and return scored rows."""
-        oracle = self.benchmark.get_oracle()
-        scorer = Scorer(oracle)
+        scorer = Scorer(self.benchmark)
         rows = []
         for condition in CONDITIONS:
             for scenario in SCENARIOS:
                 execution = self.runner(condition, scenario)
-                scores = scorer.score_run(execution)
+                scores = scorer.score_run(execution, scenario)
                 rows.append({
                     "condition": condition,
                     "scenario": scenario,
@@ -396,8 +472,9 @@ class ExperimentPipeline:
             writer = csv.writer(f)
             writer.writerow(["Condition", "Scenario", "TCR", "TTC", "ASC", "FAR", "RQS"])
             for r in rows:
+                ttc = "NA" if r["TTC"] is None else f"{r['TTC']:.1f}"
                 writer.writerow([r["condition"], r["scenario"],
-                                 f"{r['TCR']:.3f}", f"{r['TTC']:.1f}",
+                                 f"{r['TCR']:.3f}", ttc,
                                  f"{r['ASC']:.3f}", f"{r['FAR']:.3f}", f"{r['RQS']:.1f}"])
 
         # Per-run findings JSON — unique filename per cell (no overwrite).
@@ -422,8 +499,9 @@ class ExperimentPipeline:
             f.write("| Condition | Scenario | TCR | TTC | ASC | FAR | RQS |\n")
             f.write("|---|---|---|---|---|---|---|\n")
             for r in rows:
+                ttc = "NA" if r["TTC"] is None else f"{r['TTC']:.0f}"
                 f.write(f"| {r['condition']} | {r['scenario']} | {r['TCR']:.2f} | "
-                        f"{r['TTC']:.0f} | {r['ASC']:.2f} | {r['FAR']:.2f} | {r['RQS']:.1f} |\n")
+                        f"{ttc} | {r['ASC']:.2f} | {r['FAR']:.2f} | {r['RQS']:.1f} |\n")
 
         print(f"[Experiment] Exported 12-run matrix to {output_dir} "
               "(evaluation_matrix.csv, findings/*.json, evaluation_summary.md)")

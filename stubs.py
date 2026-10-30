@@ -10,7 +10,7 @@ def mock_web_agent(task: Task) -> list[Finding]:
     mock_finding = Finding(
         task_id=task.id,
         surface="web",
-        title="SQL Injection in Login Panel",
+        title="[SIMULATED] SQL Injection in Login Panel",
         description="Blind SQLi found in the 'username' parameter. Extracted admin hash.",
         severity="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
         evidence="Parameter: username\nPayload: admin' OR 1=1--",
@@ -33,7 +33,7 @@ def mock_network_agent(task: Task, found_creds: list = None) -> list[Finding]:
     mock_finding = Finding(
         task_id=task.id,
         surface="network",
-        title="Anonymous SMB Share Access",
+        title="[SIMULATED] Anonymous SMB Share Access",
         description="IPC$ and C$ shares are readable without authentication.",
         severity="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
         evidence="smbclient -N -L \\\\target_ip",
@@ -56,7 +56,7 @@ def mock_ad_agent(task: Task) -> list[Finding]:
     mock_finding = Finding(
         task_id=task.id,
         surface="ad",
-        title="Anonymous LDAP Enumeration",
+        title="[SIMULATED] Anonymous LDAP Enumeration",
         description="The directory allows unauthenticated enumeration of domain objects.",
         severity="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
         evidence="ldapsearch -x -H ldap://target_ip -b 'dc=example,dc=local'",

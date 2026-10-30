@@ -263,25 +263,25 @@ class TestSpecialistAgents:
         with pytest.raises(TypeError):
             BaseAgent("test")
 
-    def test_web_agent_run(self):
-        from schema import Task
+    def test_web_agent_transforms_real_tool_output(self, monkeypatch):
+        """WebAgent must map real tool findings, not fabricate a fixed result."""
+        from schema import Task, Finding as CoreFinding
+        import agents.web_agent as real_web
         from src.ml.agents import WebAgent
-        wa = WebAgent()
-        task = Task(type="web", target="http://test.local")
-        findings = wa.run(task)
-        assert isinstance(findings, list)
-        assert len(findings) > 0
-        assert findings[0].surface == "web"
+        monkeypatch.setattr(real_web, "run_web_agent", lambda task: [
+            CoreFinding(task_id=task.id, surface="web", title="SQLi in id",
+                        description="d", severity="High", evidence="e", remediation="r")
+        ])
+        findings = WebAgent().run(Task(type="web", target="http://test.local"))
+        assert len(findings) == 1
+        assert findings[0].surface == "web" and findings[0].title == "SQLi in id"
 
-    def test_network_agent_run(self):
+    def test_network_agent_not_implemented(self):
+        """NetworkAgent must refuse rather than fabricate until P3 is integrated."""
         from schema import Task
         from src.ml.agents import NetworkAgent
-        na = NetworkAgent()
-        task = Task(type="network", target="10.0.0.1")
-        findings = na.run(task)
-        assert isinstance(findings, list)
-        assert len(findings) > 0
-        assert findings[0].surface in ["network", "ad"]
+        with pytest.raises(NotImplementedError):
+            NetworkAgent().run(Task(type="network", target="10.0.0.1"))
 
     def test_reporting_agent_deduplicate(self):
         from src.ml.agents import ReportingAgent
@@ -326,21 +326,22 @@ class TestEvaluation:
         assert MetricsCalculator.calculate_tcr(8, 10) == pytest.approx(0.8)
         assert MetricsCalculator.calculate_tcr(0, 0) == 0.0
         assert MetricsCalculator.calculate_ttc(0, 150.5) == 150.5
+        assert MetricsCalculator.calculate_ttc(0, None) is None  # no compromise
         assert MetricsCalculator.calculate_asc(4, 4) == pytest.approx(1.0)
         assert MetricsCalculator.calculate_asc(0, 0) == 0.0
         assert MetricsCalculator.calculate_far(2, 50) == pytest.approx(0.04)
         assert MetricsCalculator.calculate_far(0, 0) == 0.0
 
     def test_scorer_produces_all_keys(self):
-        from src.ml.evaluation import Scorer
-        gt = {"total_nodes": 4}
-        scorer = Scorer(gt)
+        from src.ml.evaluation import Scorer, BenchmarkEnvironment
+        scorer = Scorer(BenchmarkEnvironment())
         data = {
-            "tasks_completed": 10, "total_tasks": 10,
+            "objectives_completed": 2, "vulnerabilities_identified": 2,
             "start_time": 0, "compromise_time": 150.5,
-            "discovered_nodes": 4, "false_actions": 2, "total_actions": 50
+            "unproductive_invocations": 2, "total_invocations": 50,
+            "findings": [],
         }
-        scores = scorer.score_run(data)
+        scores = scorer.score_run(data, "web")
         assert all(k in scores for k in ["TCR", "TTC", "ASC", "FAR", "RQS"])
 
     def test_benchmark_environment(self):
