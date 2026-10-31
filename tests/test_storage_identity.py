@@ -33,12 +33,33 @@ class _FakeClient:
         return self._c
 
 
-# Stub chromadb so importing db does not require the real package / a store.
-_fake = types.ModuleType("chromadb")
-_fake.PersistentClient = lambda *a, **k: _FakeClient()
-sys.modules["chromadb"] = _fake
+# db is imported against a fake chromadb, but only while this module's tests run.
+# The stub must NOT be installed at import time: pytest imports every test module
+# during collection, before any test runs, so a module-level
+# `sys.modules["chromadb"] = fake` would poison the whole session and break every
+# other test that needs the real chromadb. setup_module/teardown_module install
+# and restore it around this module only.
+db = None
+_orig_chromadb = None
 
-import db  # noqa: E402
+
+def setup_module(module):
+    global db, _orig_chromadb
+    _orig_chromadb = sys.modules.get("chromadb")
+    _fake = types.ModuleType("chromadb")
+    _fake.PersistentClient = lambda *a, **k: _FakeClient()
+    sys.modules["chromadb"] = _fake
+    sys.modules.pop("db", None)  # force db to (re)bind the fake
+    import db as _db
+    db = _db
+
+
+def teardown_module(module):
+    sys.modules.pop("db", None)
+    if _orig_chromadb is None:
+        sys.modules.pop("chromadb", None)
+    else:
+        sys.modules["chromadb"] = _orig_chromadb
 
 
 def test_query_credentials_filters_non_credentials():
@@ -58,6 +79,7 @@ def test_looks_like_credential():
 
 
 if __name__ == "__main__":
+    setup_module(None)
     test_query_credentials_filters_non_credentials()
     test_looks_like_credential()
     print("ok")
