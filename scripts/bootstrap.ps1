@@ -45,7 +45,7 @@ if (-not (Test-Path "$VENV_PATH")) {
 # Upgrade pip and install dependencies using the explicit path to the venv executables
 Write-Host "      Upgrading pip and installing dependencies..."
 & "$VENV_PATH\Scripts\python.exe" -m pip install --upgrade pip
-& "$VENV_PATH\Scripts\pip.exe" install chromadb==0.4.24 openai==1.14.0 anthropic==0.21.3 ollama==0.1.7 pydantic==2.6.4 langchain==0.1.13 langgraph==0.0.30
+& "$VENV_PATH\Scripts\pip.exe" install "numpy<2" chromadb==0.4.24 openai==1.14.0 anthropic==0.21.3 ollama==0.1.7 pydantic==2.6.4 langchain==0.1.13 langgraph==0.0.30
 
 Write-Host "`n=======================================================" -ForegroundColor Cyan
 Write-Host "  Bootstrap Complete!                                  " -ForegroundColor Cyan
